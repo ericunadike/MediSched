@@ -219,7 +219,7 @@ export default function BatchAppointmentSystem() {
     }
   };
 
-  // Generate personalized message text
+  // Generate personalized message text with new format (WhatsApp Markdown)
   const generateMessageText = (appointment) => {
     const formattedDate = new Date(appointment.appointmentDate).toLocaleDateString('en-GB', {
       weekday: 'long',
@@ -232,17 +232,35 @@ export default function BatchAppointmentSystem() {
     const timeObj = new Date(2000, 0, 1, hours, minutes);
     const formattedTime = timeObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
+    const specialInstructionsSection = appointment.specialInstructions 
+      ? `*Special Instructions:*\n${appointment.specialInstructions}\n`
+      : '';
+
     return `
 Dear ${appointment.patientName},
 
-You've been scheduled to meet with ${appointment.doctor} on ${formattedDate} at ${formattedTime} for ${appointment.reason} in the ${appointment.department} department at ${hospitalInfo.name}.
+You have been scheduled for an appointment at *${hospitalInfo.name}*.
 
-${appointment.specialInstructions ? `Special Instructions: ${appointment.specialInstructions}\n` : ''}
+*Appointment Details:*
+Date: ${formattedDate}
+Time: ${formattedTime}
+Doctor: ${appointment.doctor}
+Department: ${appointment.department}
+Reason: ${appointment.reason}
 
-Location: ${hospitalInfo.address}
-Contact: ${hospitalInfo.phone}
+${specialInstructionsSection}
+*Location:*
+${hospitalInfo.address}
 
-We look forward to seeing you!
+*Contact Us:*
+${hospitalInfo.phone}
+
+Please arrive 15 minutes before your scheduled time. If you need to reschedule, kindly contact us at least 24 hours in advance.
+
+We look forward to seeing you and providing you with the best care!
+
+Best regards,
+${hospitalInfo.name} Team
     `.trim();
   };
 
