@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Calendar, Clock, User, MapPin, Phone, Stethoscope, 
   Share2, Plus, Settings, Save, Upload, Download, 
   Users, Mail, Filter, Menu, X, ChevronDown,
-  FileUp, FileDown, Edit3, Trash2, Info, Copy,
-  MessageCircle, CheckCircle, AlertCircle
+  FileUp, FileDown, Edit3, Trash2, Info
 } from 'lucide-react';
 
 export default function BatchAppointmentSystem() {
@@ -31,33 +30,13 @@ export default function BatchAppointmentSystem() {
   });
 
   const [showSettings, setShowSettings] = useState(false);
-  const [tempSettings, setTempSettings] = useState({...hospitalInfo});
+  const [tempSettings, setTempSettings] = useState(hospitalInfo);
   const [selectedAppointments, setSelectedAppointments] = useState(new Set());
   const [filterDate, setFilterDate] = useState('');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [showCSVInstructions, setShowCSVInstructions] = useState(false);
-  
-  // Bulk sharing state
-  const [bulkShareProgress, setBulkShareProgress] = useState({
-    isSharing: false,
-    currentIndex: 0,
-    total: 0,
-    currentPatient: '',
-    completed: 0,
-    failed: 0,
-    currentMessage: '',
-    currentPhone: ''
-  });
-
-  const [showBulkShareModal, setShowBulkShareModal] = useState(false);
-
-  // Initialize tempSettings when modal opens
-  useEffect(() => {
-    if (showSettings) {
-      setTempSettings({...hospitalInfo});
-    }
-  }, [showSettings, hospitalInfo]);
+  const [bulkProgress, setBulkProgress] = useState({ sent: 0, total: 0, status: '' });
 
   // Handle CSV Import
   const handleCSVImport = (event) => {
@@ -77,6 +56,7 @@ export default function BatchAppointmentSystem() {
 
         const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
         
+        // Validate headers
         const expectedHeaders = ['patientname', 'patientphone', 'appointmentdate', 'appointmenttime', 'doctor', 'department', 'reason', 'specialinstructions'];
         const isValidCSV = expectedHeaders.every(header => headers.includes(header));
         
@@ -116,6 +96,10 @@ export default function BatchAppointmentSystem() {
         alert('Error reading CSV file. Please check the format and try again.');
         console.error('CSV Import Error:', error);
       }
+    };
+    
+    reader.onerror = () => {
+      alert('Error reading file. Please try again.');
     };
     
     reader.readAsText(file);
@@ -169,18 +153,26 @@ export default function BatchAppointmentSystem() {
     };
 
     setAppointments(prev => [...prev, newAppointment]);
+    
+    // Reset form but stay on the same page
     setCurrentAppointment({
-      patientName: '', patientPhone: '', appointmentDate: '', appointmentTime: '', 
-      doctor: '', department: '', reason: '', specialInstructions: '',
+      patientName: '',
+      patientPhone: '',
+      appointmentDate: '',
+      appointmentTime: '',
+      doctor: '',
+      department: '',
+      reason: '',
+      specialInstructions: '',
     });
     
-    alert('Appointment added successfully!');
+    alert('Appointment added successfully! You can add another appointment.');
   };
 
   // Edit appointment
   const handleEditAppointment = (appointment) => {
     setEditingAppointment(appointment);
-    setCurrentAppointment({...appointment});
+    setCurrentAppointment(appointment);
     setView('add-appointment');
   };
 
@@ -201,8 +193,14 @@ export default function BatchAppointmentSystem() {
 
     setEditingAppointment(null);
     setCurrentAppointment({
-      patientName: '', patientPhone: '', appointmentDate: '', appointmentTime: '', 
-      doctor: '', department: '', reason: '', specialInstructions: '',
+      patientName: '',
+      patientPhone: '',
+      appointmentDate: '',
+      appointmentTime: '',
+      doctor: '',
+      department: '',
+      reason: '',
+      specialInstructions: '',
     });
     setView('dashboard');
     alert('Appointment updated successfully!');
@@ -217,11 +215,12 @@ export default function BatchAppointmentSystem() {
         newSelection.delete(id);
         return newSelection;
       });
+      alert('Appointment deleted successfully!');
     }
   };
 
-  // Create personalized message
-  const createPersonalizedMessage = (appointment) => {
+  // Generate personalized message text
+  const generateMessageText = (appointment) => {
     const formattedDate = new Date(appointment.appointmentDate).toLocaleDateString('en-GB', {
       weekday: 'long',
       year: 'numeric',
@@ -229,219 +228,213 @@ export default function BatchAppointmentSystem() {
       day: 'numeric',
     });
     
-    const formattedTime = appointment.appointmentTime 
-      ? new Date(`2000-01-01T${appointment.appointmentTime}`).toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
-          minute: '2-digit', 
-          hour12: true 
-        })
-      : 'Time to be confirmed';
+    const [hours, minutes] = appointment.appointmentTime.split(':');
+    const timeObj = new Date(2000, 0, 1, hours, minutes);
+    const formattedTime = timeObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-    let message = `Dear ${appointment.patientName},\n\n` +
-`You have been scheduled for an appointment at *${hospitalInfo.name}*.\n\n` +
-`*Appointment Details:*\n` +
-`📅 Date: ${formattedDate}\n` +
-`⏰ Time: ${formattedTime}\n` +
-`👨‍⚕️ Doctor: ${appointment.doctor}\n` +
-`🏥 Department: ${appointment.department}\n` +
-`📋 Reason: ${appointment.reason}\n`;
+    return `
+Dear ${appointment.patientName},
 
-    if (appointment.specialInstructions && appointment.specialInstructions.trim() !== '') {
-      message += `\n*Special Instructions:*\n${appointment.specialInstructions}\n`;
-    }
+You've been scheduled to meet with ${appointment.doctor} on ${formattedDate} at ${formattedTime} for ${appointment.reason} in the ${appointment.department} department at ${hospitalInfo.name}.
 
-    message += `\n*Location:*\n${hospitalInfo.address}\n\n` +
-`*Contact Us:*\n${hospitalInfo.phone}\n\n` +
-`Please arrive 15 minutes before your scheduled time. If you need to reschedule, kindly contact us at least 24 hours in advance.\n\n` +
-`We look forward to seeing you and providing you with the best care!\n\n` +
-`Best regards,\n` +
-`${hospitalInfo.name} Team`;
+${appointment.specialInstructions ? `Special Instructions: ${appointment.specialInstructions}\n` : ''}
 
-    return message;
+Location: ${hospitalInfo.address}
+Contact: ${hospitalInfo.phone}
+
+We look forward to seeing you!
+    `.trim();
   };
 
-  // Helper function to format phone numbers
-  const formatPhoneNumber = (phone) => {
-    // Remove all non-digit characters
-    let cleaned = phone.replace(/\D/g, '');
-    
-    // Handle Nigerian numbers
-    if (cleaned.startsWith('0')) {
-      cleaned = '234' + cleaned.substring(1);
-    } else if (!cleaned.startsWith('234') && cleaned.length === 10) {
-      cleaned = '234' + cleaned;
-    }
-    
-    return cleaned;
+  // Single appointment sharing
+  const shareSingleAppointment = (appointment) => {
+    const shareText = generateMessageText(appointment);
+    const phoneNumber = appointment.patientPhone.replace(/\D/g, '');
+    const windowName = `whatsapp_${appointment.id}_${Date.now()}`;
+    const whatsappURL = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(shareText)}`;
+    window.open(whatsappURL, windowName);
   };
 
-  // Start sequential bulk sharing
-  const startSequentialBulkShare = () => {
+  // Bulk sharing: Generates improved HTML with better logs
+  const handleBulkShare = () => {
     if (selectedAppointments.size === 0) {
       alert('Please select appointments to share');
       return;
     }
 
     const selectedApts = appointments.filter(apt => selectedAppointments.has(apt.id));
-    const validAppointments = selectedApts.filter(apt => 
-      apt.patientPhone && apt.patientPhone.trim() !== ''
-    );
-
-    if (validAppointments.length === 0) {
-      alert('No selected appointments have valid phone numbers');
-      return;
-    }
-
-    setShowBulkShareModal(false);
     
-    // Start with first appointment
-    startNextAppointment(validAppointments, 0);
-  };
-
-  const startNextAppointment = (appointments, index) => {
-    if (index >= appointments.length) {
-      // All appointments processed
-      setBulkShareProgress({
-        isSharing: false,
-        currentIndex: 0,
-        total: 0,
-        currentPatient: '',
-        completed: 0,
-        failed: 0,
-        currentMessage: '',
-        currentPhone: ''
-      });
-      
-      const completed = appointments.length - bulkShareProgress.failed;
-      alert(`✅ Bulk messaging completed!\n\nSuccessfully sent: ${completed} messages\nFailed: ${bulkShareProgress.failed} messages`);
-      return;
+    if (selectedApts.length > 500) {
+      if (!window.confirm(`You are about to generate an auto-sender for ${selectedApts.length} appointments. This may take time and could trigger WhatsApp limits if not paced properly. Continue?`)) {
+        return;
+      }
     }
 
-    const appointment = appointments[index];
-    const message = createPersonalizedMessage(appointment);
-    const phone = appointment.patientPhone;
+    setBulkProgress({ sent: 0, total: selectedApts.length, status: 'Generating auto-sender...' });
 
-    setBulkShareProgress({
-      isSharing: true,
-      currentIndex: index,
-      total: appointments.length,
-      currentPatient: appointment.patientName,
-      completed: index, // Already completed previous ones
-      failed: bulkShareProgress.failed,
-      currentMessage: message,
-      currentPhone: phone
+    // Generate array of WhatsApp URLs with personalized messages
+    const waLinks = selectedApts.map(appointment => {
+      const shareText = generateMessageText(appointment);
+      const phoneNumber = appointment.patientPhone.replace(/\D/g, '');
+      return { url: `https://wa.me/${phoneNumber}?text=${encodeURIComponent(shareText)}`, patientName: appointment.patientName };
     });
 
-    // Auto-copy message to clipboard
-    copyToClipboard(message);
-  };
+    // Create HTML with enhanced JS
+    let htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Auto-Opener - ${hospitalInfo.name}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f0f0f0; max-width: 800px; margin: 0 auto; }
+    h1 { color: #2563eb; }
+    .instructions { background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffeaa7; }
+    #controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    button { padding: 10px 20px; background: #25D366; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #128C7E; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    #progress { font-weight: bold; margin-bottom: 20px; color: #d35400; }
+    #log { background: white; padding: 15px; border: 1px solid #ddd; border-radius: 8px; height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>WhatsApp Auto-Opener for ${selectedApts.length} Appointments</h1>
+  <div class="instructions">
+    <p><strong>IMPORTANT NOTES:</strong></p>
+    <ul>
+      <li><strong>Login First:</strong> Open <a href="https://web.whatsapp.com" target="_blank">web.whatsapp.com</a> in another tab and scan the QR code with your WhatsApp app. Refresh if not connected.</li>
+      <li><strong>No Auto-Send:</strong> This only OPENS pre-filled chats. You MUST manually click "Send" in each tab—WhatsApp blocks automation.</li>
+      <li><strong>Delay:</strong> Use 10000-30000ms to avoid bans. Start small!</li>
+      <li><strong>Troubleshooting:</strong> If tabs don't open: Disable popup blocker (browser settings). Check console (F12) for errors.</li>
+      <li><strong>Progress:</strong> Watch the log below. Each open is logged with patient name.</li>
+    </ul>
+  </div>
+  
+  <div id="controls">
+    <button id="checkConnection">Check WhatsApp Connection</button>
+    <button id="startBtn">Start Opening Tabs</button>
+    <button id="pauseBtn" disabled>Pause</button>
+    <button id="resumeBtn" disabled>Resume</button>
+    <label>Delay (ms): <input type="number" id="delayInput" value="15000" min="5000" step="1000"></label>
+  </div>
+  
+  <div id="progress">Progress: 0 / ${selectedApts.length}</div>
+  <div id="log">Ready. Click 'Check WhatsApp Connection' first!\n</div>
 
-  const copyToClipboard = async (text) => {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch (err) {
-      console.log('Clipboard failed:', err);
+  <script>
+    const links = ${JSON.stringify(waLinks)};
+    let currentIndex = 0;
+    let intervalId = null;
+    let isPaused = false;
+
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const delayInput = document.getElementById('delayInput');
+    const progress = document.getElementById('progress');
+    const log = document.getElementById('log');
+    const checkConnection = document.getElementById('checkConnection');
+
+    function updateProgress() {
+      progress.textContent = \`Progress: \${currentIndex} / \${links.length} tabs opened\`;
     }
-  };
 
-  const handleMessageSent = () => {
-    const selectedApts = appointments.filter(apt => selectedAppointments.has(apt.id));
-    const validAppointments = selectedApts.filter(apt => 
-      apt.patientPhone && apt.patientPhone.trim() !== ''
-    );
-
-    const nextIndex = bulkShareProgress.currentIndex + 1;
-    
-    if (nextIndex < validAppointments.length) {
-      startNextAppointment(validAppointments, nextIndex);
-    } else {
-      // All done
-      setBulkShareProgress({
-        isSharing: false,
-        currentIndex: 0,
-        total: 0,
-        currentPatient: '',
-        completed: 0,
-        failed: 0,
-        currentMessage: '',
-        currentPhone: ''
-      });
-      
-      alert(`✅ All messages sent successfully!\n\nTotal: ${validAppointments.length} appointments`);
+    function appendLog(message, isError = false) {
+      const timestamp = new Date().toLocaleTimeString();
+      log.textContent += \`\${timestamp} - \${message}\${isError ? ' (ERROR)' : ''}\\n\`;
+      log.scrollTop = log.scrollHeight;
     }
-  };
 
-  const handleSkipAppointment = () => {
-    const selectedApts = appointments.filter(apt => selectedAppointments.has(apt.id));
-    const validAppointments = selectedApts.filter(apt => 
-      apt.patientPhone && apt.patientPhone.trim() !== ''
-    );
+    function sendNext() {
+      if (currentIndex >= links.length || isPaused) return;
 
-    const nextIndex = bulkShareProgress.currentIndex + 1;
-    
-    setBulkShareProgress(prev => ({
-      ...prev,
-      failed: prev.failed + 1
-    }));
+      const item = links[currentIndex];
+      const win = window.open(item.url, '_blank');
+      if (win) {
+        appendLog(\`Opened tab for \${item.patientName || 'Patient ' + (currentIndex + 1)}\`);
+      } else {
+        appendLog('Failed to open tab - popup blocked?', true);
+      }
+      currentIndex++;
+      updateProgress();
 
-    if (nextIndex < validAppointments.length) {
-      startNextAppointment(validAppointments, nextIndex);
-    } else {
-      setBulkShareProgress({
-        isSharing: false,
-        currentIndex: 0,
-        total: 0,
-        currentPatient: '',
-        completed: 0,
-        failed: 0,
-        currentMessage: '',
-        currentPhone: ''
-      });
-      
-      const completed = validAppointments.length - (bulkShareProgress.failed + 1);
-      alert(`Bulk messaging completed!\n\nSuccessfully sent: ${completed} messages\nFailed: ${bulkShareProgress.failed + 1} messages`);
+      if (currentIndex >= links.length) {
+        appendLog('All tabs opened! Now manually send in each.');
+        clearInterval(intervalId);
+        startBtn.disabled = false;
+        pauseBtn.disabled = true;
+        resumeBtn.disabled = true;
+      }
     }
-  };
 
-  const cancelBulkShare = () => {
-    setBulkShareProgress({
-      isSharing: false,
-      currentIndex: 0,
-      total: 0,
-      currentPatient: '',
-      completed: 0,
-      failed: 0,
-      currentMessage: '',
-      currentPhone: ''
+    checkConnection.addEventListener('click', () => {
+      const testWin = window.open('https://web.whatsapp.com', '_blank');
+      if (testWin) {
+        appendLog('Test tab opened - check if WhatsApp Web is logged in there.');
+      } else {
+        appendLog('Popup blocked - allow popups in browser settings.', true);
+      }
     });
-  };
 
-  const openWhatsAppWithMessage = () => {
-    const formattedPhone = formatPhoneNumber(bulkShareProgress.currentPhone);
-    const encodedMessage = encodeURIComponent(bulkShareProgress.currentMessage);
-    const whatsappURL = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
-    window.open(whatsappURL, '_blank');
-  };
+    startBtn.addEventListener('click', () => {
+      if (currentIndex >= links.length) {
+        currentIndex = 0;
+        updateProgress();
+        appendLog('Resetting...');
+      }
+      const delay = parseInt(delayInput.value) || 15000;
+      if (delay < 5000) {
+        appendLog('Delay too low - increased to 5000ms for safety.', true);
+        delayInput.value = 5000;
+      }
+      intervalId = setInterval(sendNext, delay);
+      appendLog(\`Started opening with \${delay}ms delay. Manually send in tabs!\`);
+      startBtn.disabled = true;
+      pauseBtn.disabled = false;
+      resumeBtn.disabled = true;
+      isPaused = false;
+    });
 
-  // Single appointment sharing
-  const shareSingleAppointment = (appointment) => {
-    if (!appointment.patientPhone || appointment.patientPhone.trim() === '') {
-      alert(`Cannot share: No phone number for ${appointment.patientName}`);
-      return;
-    }
+    pauseBtn.addEventListener('click', () => {
+      isPaused = true;
+      clearInterval(intervalId);
+      appendLog('Paused - resume or close tabs.');
+      startBtn.disabled = false;
+      pauseBtn.disabled = true;
+      resumeBtn.disabled = false;
+    });
 
-    const message = createPersonalizedMessage(appointment);
-    const phoneNumber = formatPhoneNumber(appointment.patientPhone);
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappURL = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
-    
-    // Copy to clipboard first
-    copyToClipboard(message);
-    
-    // Then open WhatsApp
-    window.open(whatsappURL, '_blank');
-    
-    alert(`Personalized message for ${appointment.patientName} copied to clipboard!`);
+    resumeBtn.addEventListener('click', () => {
+      const delay = parseInt(delayInput.value) || 15000;
+      intervalId = setInterval(sendNext, delay);
+      appendLog('Resumed opening.');
+      startBtn.disabled = true;
+      pauseBtn.disabled = false;
+      resumeBtn.disabled = true;
+      isPaused = false;
+    });
+  </script>
+</body>
+</html>
+`;
+
+    // Download the HTML file
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `whatsapp-auto-opener-${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    setBulkProgress({ sent: selectedApts.length, total: selectedApts.length, status: 'Auto-opener generated! Download complete.' });
+    setTimeout(() => setBulkProgress({ sent: 0, total: 0, status: '' }), 5000);
+    alert(`Generated improved auto-opener HTML for ${selectedApts.length} appointments. Open it, connect WhatsApp Web, and click Start. Remember: Manual send required per tab!`);
   };
 
   // Select/deselect all appointments
@@ -468,319 +461,6 @@ export default function BatchAppointmentSystem() {
   const filteredAppointments = filterDate 
     ? appointments.filter(apt => apt.appointmentDate === filterDate)
     : appointments;
-
-  // Settings Modal
-  const SettingsModal = () => {
-    const handleSave = () => {
-      setHospitalInfo({...tempSettings});
-      setShowSettings(false);
-      alert('Settings saved successfully!');
-    };
-
-    const handleCancel = () => {
-      setShowSettings(false);
-    };
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-600 p-2 rounded-lg">
-                <Settings className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-800">Hospital Settings</h2>
-                <p className="text-gray-600 text-sm">Customize your hospital information</p>
-              </div>
-            </div>
-            <button
-              onClick={handleCancel}
-              className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
-          </div>
-
-          <div className="p-6 space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Hospital Name
-              </label>
-              <input
-                type="text"
-                value={tempSettings.name}
-                onChange={(e) => setTempSettings(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter hospital name"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Hospital Address
-              </label>
-              <textarea
-                value={tempSettings.address}
-                onChange={(e) => setTempSettings(prev => ({ ...prev, address: e.target.value }))}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                rows="2"
-                placeholder="Enter full address"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Contact Phone Number
-              </label>
-              <input
-                type="tel"
-                value={tempSettings.phone}
-                onChange={(e) => setTempSettings(prev => ({ ...prev, phone: e.target.value }))}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="+234 XXX XXX XXXX"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Primary Color
-                </label>
-                <input
-                  type="color"
-                  value={tempSettings.primaryColor}
-                  onChange={(e) => setTempSettings(prev => ({ ...prev, primaryColor: e.target.value }))}
-                  className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Secondary Color
-                </label>
-                <input
-                  type="color"
-                  value={tempSettings.secondaryColor}
-                  onChange={(e) => setTempSettings(prev => ({ ...prev, secondaryColor: e.target.value }))}
-                  className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <button
-                onClick={handleCancel}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
-              >
-                <Save className="w-5 h-5" />
-                Save Settings
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Bulk Share Progress Component
-  const BulkShareProgress = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="bg-green-600 p-2 rounded-lg">
-              <MessageCircle className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-800">Send Personalized Message</h2>
-              <p className="text-gray-600 text-sm">
-                {bulkShareProgress.currentIndex + 1} of {bulkShareProgress.total}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={cancelBulkShare}
-            className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          {/* Progress */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="font-semibold text-blue-800">Progress</span>
-              <span className="text-blue-600">
-                {bulkShareProgress.currentIndex + 1} / {bulkShareProgress.total}
-              </span>
-            </div>
-            <div className="w-full bg-blue-200 rounded-full h-2">
-              <div 
-                className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                style={{ 
-                  width: `${((bulkShareProgress.currentIndex + 1) / bulkShareProgress.total) * 100}%` 
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Current Patient */}
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <User className="w-5 h-5 text-green-600" />
-              <div>
-                <h3 className="font-semibold text-green-800">Current Patient</h3>
-                <p className="text-green-700">{bulkShareProgress.currentPatient}</p>
-                <p className="text-green-600 text-sm">Phone: {bulkShareProgress.currentPhone}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Message Preview */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-800">Personalized Message</h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => copyToClipboard(bulkShareProgress.currentMessage)}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition duration-200"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copy Again
-                </button>
-              </div>
-            </div>
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-60 overflow-y-auto">
-              <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">
-                {bulkShareProgress.currentMessage}
-              </pre>
-            </div>
-            <p className="text-green-600 text-sm mt-2 flex items-center gap-1">
-              <CheckCircle className="w-4 h-4" />
-              Message automatically copied to clipboard!
-            </p>
-          </div>
-
-          {/* Instructions */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <h4 className="font-semibold text-yellow-800 mb-3 flex items-center gap-2">
-              <Info className="w-4 h-4" />
-              Quick Steps:
-            </h4>
-            <ol className="text-yellow-700 text-sm space-y-2">
-              <li className="flex items-center gap-2">
-                <span className="bg-yellow-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">1</span>
-                <span><strong>Open WhatsApp</strong> - Message is pre-loaded with patient details</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="bg-yellow-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">2</span>
-                <span><strong>Find the patient</strong>: {bulkShareProgress.currentPhone}</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="bg-yellow-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">3</span>
-                <span><strong>Paste the message</strong> (already copied for you)</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="bg-yellow-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">4</span>
-                <span><strong>Send the message</strong></span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="bg-yellow-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">5</span>
-                <span><strong>Click "Message Sent"</strong> below to continue</span>
-              </li>
-            </ol>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-4">
-            <button
-              onClick={openWhatsAppWithMessage}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
-            >
-              <MessageCircle className="w-4 h-4" />
-              Open WhatsApp
-            </button>
-            <button
-              onClick={handleSkipAppointment}
-              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
-            >
-              <AlertCircle className="w-4 h-4" />
-              Skip
-            </button>
-            <button
-              onClick={handleMessageSent}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
-            >
-              <CheckCircle className="w-4 h-4" />
-              Message Sent
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Bulk Share Confirmation Modal
-  const BulkShareModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="bg-green-600 p-2 rounded-lg">
-              <Share2 className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-800">Send Personalized Messages</h2>
-              <p className="text-gray-600 text-sm">{selectedAppointments.size} appointments selected</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowBulkShareModal(false)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="font-semibold text-blue-800 mb-2">Personalized Messaging</h3>
-            <ul className="text-blue-700 text-sm space-y-1">
-              <li>• Each message includes patient's name</li>
-              <li>• All appointment details included</li>
-              <li>• Professional, friendly tone</li>
-              <li>• One patient at a time</li>
-              <li>• Message auto-copied to clipboard</li>
-            </ul>
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={() => setShowBulkShareModal(false)}
-              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={startSequentialBulkShare}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
-            >
-              <Share2 className="w-5 h-5" />
-              Start Sending
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   // CSV Instructions Modal
   const CSVInstructionsModal = () => (
@@ -863,6 +543,121 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
     </div>
   );
 
+  // Settings Modal
+  const SettingsModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg">
+              <Settings className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-800">Hospital Settings</h2>
+              <p className="text-gray-600 text-sm">Customize your hospital information</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowSettings(false)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Hospital Name
+            </label>
+            <input
+              type="text"
+              value={tempSettings.name}
+              onChange={(e) => setTempSettings({ ...tempSettings, name: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Enter hospital name"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Hospital Address
+            </label>
+            <textarea
+              value={tempSettings.address}
+              onChange={(e) => setTempSettings({ ...tempSettings, address: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              rows="2"
+              placeholder="Enter full address"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Contact Phone Number
+            </label>
+            <input
+              type="tel"
+              value={tempSettings.phone}
+              onChange={(e) => setTempSettings({ ...tempSettings, phone: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="+234 XXX XXX XXXX"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Primary Color
+              </label>
+              <input
+                type="color"
+                value={tempSettings.primaryColor}
+                onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
+                className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Secondary Color
+              </label>
+              <input
+                type="color"
+                value={tempSettings.secondaryColor}
+                onChange={(e) => setTempSettings({ ...tempSettings, secondaryColor: e.target.value })}
+                className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={() => {
+                setShowSettings(false);
+                setTempSettings(hospitalInfo);
+              }}
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                setHospitalInfo(tempSettings);
+                setShowSettings(false);
+                alert('Settings saved successfully!');
+              }}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+            >
+              <Save className="w-5 h-5" />
+              Save Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   // Mobile Menu
   const MobileMenu = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden">
@@ -921,6 +716,284 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
       </div>
     </div>
   );
+
+  // Dashboard View
+  if (view === 'dashboard') {
+    return (
+      <>
+        {showSettings && <SettingsModal />}
+        {showCSVInstructions && <CSVInstructionsModal />}
+        {showMobileMenu && <MobileMenu />}
+        
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-8">
+          <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <div 
+                  className="p-3 rounded-2xl shadow-lg"
+                  style={{ backgroundColor: hospitalInfo.primaryColor }}
+                >
+                  <Users className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-800">MediSched</h1>
+                  <p className="text-gray-600">Efficiently manage patient appointments</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                {/* Desktop Actions */}
+                <div className="hidden lg:flex items-center gap-3">
+                  <button
+                    onClick={() => { setView('add-appointment'); setEditingAppointment(null); setCurrentAppointment({
+                      patientName: '', patientPhone: '', appointmentDate: '', appointmentTime: '', doctor: '', department: '', reason: '', specialInstructions: ''
+                    }); }}
+                    className="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-200 transition duration-200 flex items-center gap-2 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Appointment
+                  </button>
+                  <button
+                    onClick={() => setShowSettings(true)}
+                    className="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-200 transition duration-200 flex items-center gap-2 shadow-sm"
+                  >
+                    <Settings className="w-4 h-4" />
+                    Settings
+                  </button>
+                </div>
+                
+                {/* Mobile Menu Button */}
+                <button
+                  onClick={() => setShowMobileMenu(true)}
+                  className="lg:hidden bg-white hover:bg-gray-50 text-gray-700 p-2 rounded-lg border border-gray-200 transition duration-200 shadow-sm"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              {[
+                { icon: Users, label: 'Total Appointments', value: appointments.length, color: 'blue' },
+                { icon: Calendar, label: 'Scheduled', value: appointments.filter(apt => apt.status === 'scheduled').length, color: 'green' },
+                { icon: Mail, label: 'Selected', value: selectedAppointments.size, color: 'orange' },
+                { icon: Filter, label: 'Filtered', value: filteredAppointments.length, color: 'purple' }
+              ].map((stat, index) => (
+                <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-xl bg-${stat.color}-100`}>
+                      <stat.icon className={`w-6 h-6 text-${stat.color}-600`} />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
+                      <p className="text-sm text-gray-600">{stat.label}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Action Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <button
+                onClick={() => { setView('add-appointment'); setEditingAppointment(null); setCurrentAppointment({
+                  patientName: '', patientPhone: '', appointmentDate: '', appointmentTime: '', doctor: '', department: '', reason: '', specialInstructions: ''
+                }); }}
+                className="bg-white hover:bg-gray-50 rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 text-left group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="bg-blue-100 p-3 rounded-xl group-hover:scale-110 transition-transform duration-200">
+                    <Plus className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-800">Add Appointment</h3>
+                    <p className="text-sm text-gray-600">Add new appointment</p>
+                  </div>
+                </div>
+              </button>
+              
+              <label className="bg-white hover:bg-gray-50 rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 text-left group cursor-pointer">
+                <div className="flex items-center gap-4">
+                  <div className="bg-green-100 p-3 rounded-xl group-hover:scale-110 transition-transform duration-200">
+                    <FileDown className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-800">Import CSV</h3>
+                    <p className="text-sm text-gray-600">Bulk import appointments</p>
+                  </div>
+                </div>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleCSVImport}
+                  className="hidden"
+                />
+              </label>
+
+              <button
+                onClick={() => setShowCSVInstructions(true)}
+                className="bg-white hover:bg-gray-50 rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 text-left group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="bg-blue-100 p-3 rounded-xl group-hover:scale-110 transition-transform duration-200">
+                    <Info className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-800">CSV Help</h3>
+                    <p className="text-sm text-gray-600">View format instructions</p>
+                  </div>
+                </div>
+              </button>
+              
+              <button
+                onClick={exportAppointments}
+                className="bg-white hover:bg-gray-50 rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 text-left group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="bg-purple-100 p-3 rounded-xl group-hover:scale-110 transition-transform duration-200">
+                    <FileUp className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-800">Export CSV</h3>
+                    <p className="text-sm text-gray-600">Download all data</p>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            {/* Bulk Share Button */}
+            {selectedAppointments.size > 0 && (
+              <div className="mb-6">
+                <button
+                  onClick={handleBulkShare}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 px-6 rounded-2xl transition duration-200 flex items-center justify-center gap-3 shadow-lg"
+                >
+                  <Share2 className="w-5 h-5" />
+                  Generate Auto-Sender for {selectedAppointments.size} Selected Appointment{selectedAppointments.size > 1 ? 's' : ''} via WhatsApp
+                </button>
+                {bulkProgress.total > 0 && (
+                  <div className="mt-2 text-center text-sm text-gray-600">
+                    {bulkProgress.status} ({bulkProgress.sent}/{bulkProgress.total})
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Filter Section */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+              <div className="flex flex-col md:flex-row gap-4 items-center">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Filter by Date
+                  </label>
+                  <input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <button
+                  onClick={() => setFilterDate('')}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition duration-200 mt-6 md:mt-0"
+                >
+                  Clear Filter
+                </button>
+              </div>
+            </div>
+
+            {/* Appointments Table */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-6 py-4 text-left">
+                        <input
+                          type="checkbox"
+                          checked={selectedAppointments.size === filteredAppointments.length && filteredAppointments.length > 0}
+                          onChange={toggleSelectAll}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Patient</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Phone</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Date & Time</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Doctor</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredAppointments.map((appointment) => (
+                      <tr key={appointment.id} className="hover:bg-gray-50 transition-colors duration-150">
+                        <td className="px-6 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedAppointments.has(appointment.id)}
+                            onChange={() => toggleAppointmentSelection(appointment.id)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="font-medium text-gray-900">{appointment.patientName}</p>
+                            <p className="text-sm text-gray-500">{appointment.reason}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{appointment.patientPhone}</td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{appointment.appointmentDate}</p>
+                            <p className="text-sm text-gray-500">{appointment.appointmentTime}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{appointment.doctor}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => shareSingleAppointment(appointment)}
+                              className="text-green-600 hover:text-green-800 font-medium text-sm flex items-center gap-1"
+                            >
+                              <Share2 className="w-4 h-4" />
+                              Share
+                            </button>
+                            <button
+                              onClick={() => handleEditAppointment(appointment)}
+                              className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center gap-1"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAppointment(appointment.id)}
+                              className="text-red-600 hover:text-red-800 font-medium text-sm flex items-center gap-1"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                
+                {filteredAppointments.length === 0 && (
+                  <div className="text-center py-12">
+                    <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg">No appointments found</p>
+                    <p className="text-gray-400">Add appointments or import from CSV</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   // Add/Edit Appointment View
   if (view === 'add-appointment') {
@@ -1081,283 +1154,4 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
       </div>
     );
   }
-
-  // Dashboard View
-  return (
-    <>
-      {showSettings && <SettingsModal />}
-      {showCSVInstructions && <CSVInstructionsModal />}
-      {showMobileMenu && <MobileMenu />}
-      {showBulkShareModal && <BulkShareModal />}
-      {bulkShareProgress.isSharing && <BulkShareProgress />}
-      
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <div 
-                className="p-3 rounded-2xl shadow-lg"
-                style={{ backgroundColor: hospitalInfo.primaryColor }}
-              >
-                <Users className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-800">MediSched</h1>
-                <p className="text-gray-600">Efficiently manage patient appointments</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              <div className="hidden lg:flex items-center gap-3">
-                <button
-                  onClick={() => { 
-                    setView('add-appointment'); 
-                    setEditingAppointment(null); 
-                    setCurrentAppointment({
-                      patientName: '', patientPhone: '', appointmentDate: '', appointmentTime: '', 
-                      doctor: '', department: '', reason: '', specialInstructions: ''
-                    }); 
-                  }}
-                  className="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-200 transition duration-200 flex items-center gap-2 shadow-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Appointment
-                </button>
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-200 transition duration-200 flex items-center gap-2 shadow-sm"
-                >
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </button>
-              </div>
-              
-              <button
-                onClick={() => setShowMobileMenu(true)}
-                className="lg:hidden bg-white hover:bg-gray-50 text-gray-700 p-2 rounded-lg border border-gray-200 transition duration-200 shadow-sm"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            {[
-              { icon: Users, label: 'Total Appointments', value: appointments.length, color: 'blue' },
-              { icon: Calendar, label: 'Scheduled', value: appointments.filter(apt => apt.status === 'scheduled').length, color: 'green' },
-              { icon: Mail, label: 'Selected', value: selectedAppointments.size, color: 'orange' },
-              { icon: Filter, label: 'Filtered', value: filteredAppointments.length, color: 'purple' }
-            ].map((stat, index) => (
-              <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-xl bg-${stat.color}-100`}>
-                    <stat.icon className={`w-6 h-6 text-${stat.color}-600`} />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
-                    <p className="text-sm text-gray-600">{stat.label}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Action Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <button
-              onClick={() => { setView('add-appointment'); setEditingAppointment(null); setCurrentAppointment({
-                patientName: '', patientPhone: '', appointmentDate: '', appointmentTime: '', doctor: '', department: '', reason: '', specialInstructions: ''
-              }); }}
-              className="bg-white hover:bg-gray-50 rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 text-left group"
-            >
-              <div className="flex items-center gap-4">
-                <div className="bg-blue-100 p-3 rounded-xl group-hover:scale-110 transition-transform duration-200">
-                  <Plus className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-800">Add Appointment</h3>
-                  <p className="text-sm text-gray-600">Add new appointment</p>
-                </div>
-              </div>
-            </button>
-            
-            <label className="bg-white hover:bg-gray-50 rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 text-left group cursor-pointer">
-              <div className="flex items-center gap-4">
-                <div className="bg-green-100 p-3 rounded-xl group-hover:scale-110 transition-transform duration-200">
-                  <FileDown className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-800">Import CSV</h3>
-                  <p className="text-sm text-gray-600">Bulk import appointments</p>
-                </div>
-              </div>
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleCSVImport}
-                className="hidden"
-              />
-            </label>
-
-            <button
-              onClick={() => setShowCSVInstructions(true)}
-              className="bg-white hover:bg-gray-50 rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 text-left group"
-            >
-              <div className="flex items-center gap-4">
-                <div className="bg-blue-100 p-3 rounded-xl group-hover:scale-110 transition-transform duration-200">
-                  <Info className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-800">CSV Help</h3>
-                  <p className="text-sm text-gray-600">View format instructions</p>
-                </div>
-              </div>
-            </button>
-            
-            <button
-              onClick={exportAppointments}
-              className="bg-white hover:bg-gray-50 rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 text-left group"
-            >
-              <div className="flex items-center gap-4">
-                <div className="bg-purple-100 p-3 rounded-xl group-hover:scale-110 transition-transform duration-200">
-                  <FileUp className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-800">Export CSV</h3>
-                  <p className="text-sm text-gray-600">Download all data</p>
-                </div>
-              </div>
-            </button>
-          </div>
-
-          {/* Bulk Share Button */}
-          {selectedAppointments.size > 0 && (
-            <div className="mb-6">
-              <button
-                onClick={() => setShowBulkShareModal(true)}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 px-6 rounded-2xl transition duration-200 flex items-center justify-center gap-3 shadow-lg"
-              >
-                <Share2 className="w-5 h-5" />
-                Send Personalized Messages to {selectedAppointments.size} Patients
-              </button>
-              <p className="text-center text-gray-600 text-sm mt-2">
-                One patient at a time • Personalized messages • No multiple tabs
-              </p>
-            </div>
-          )}
-
-          {/* Filter Section */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
-            <div className="flex flex-col md:flex-row gap-4 items-center">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Filter by Date
-                </label>
-                <input
-                  type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <button
-                onClick={() => setFilterDate('')}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition duration-200 mt-6 md:mt-0"
-              >
-                Clear Filter
-              </button>
-            </div>
-          </div>
-
-          {/* Appointments Table */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-6 py-4 text-left">
-                      <input
-                        type="checkbox"
-                        checked={selectedAppointments.size === filteredAppointments.length && filteredAppointments.length > 0}
-                        onChange={toggleSelectAll}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Patient</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Phone</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Date & Time</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Doctor</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredAppointments.map((appointment) => (
-                    <tr key={appointment.id} className="hover:bg-gray-50 transition-colors duration-150">
-                      <td className="px-6 py-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedAppointments.has(appointment.id)}
-                          onChange={() => toggleAppointmentSelection(appointment.id)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="font-medium text-gray-900">{appointment.patientName}</p>
-                          <p className="text-sm text-gray-500">{appointment.reason}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{appointment.patientPhone}</td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{appointment.appointmentDate}</p>
-                          <p className="text-sm text-gray-500">{appointment.appointmentTime}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{appointment.doctor}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => shareSingleAppointment(appointment)}
-                            className="text-green-600 hover:text-green-800 font-medium text-sm flex items-center gap-1"
-                          >
-                            <Share2 className="w-4 h-4" />
-                            Share
-                          </button>
-                          <button
-                            onClick={() => handleEditAppointment(appointment)}
-                            className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center gap-1"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteAppointment(appointment.id)}
-                            className="text-red-600 hover:text-red-800 font-medium text-sm flex items-center gap-1"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              
-              {filteredAppointments.length === 0 && (
-                <div className="text-center py-12">
-                  <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500 text-lg">No appointments found</p>
-                  <p className="text-gray-400">Add appointments or import from CSV</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
 }
