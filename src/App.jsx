@@ -6,6 +6,13 @@ import {
   FileUp, FileDown, Edit3, Trash2, Info, Search
 } from 'lucide-react';
 
+// Supabase client
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 export default function BatchAppointmentSystem() {
   const [view, setView] = useState('dashboard');
   const [appointments, setAppointments] = useState([]);
@@ -39,39 +46,45 @@ export default function BatchAppointmentSystem() {
   const [showCSVInstructions, setShowCSVInstructions] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ sent: 0, total: 0, status: '' });
 
-  // Persistence: Load appointments from localStorage on mount
+  // Fetch appointments from Supabase with realtime
   useEffect(() => {
-    const savedAppointments = localStorage.getItem('appointments');
-    if (savedAppointments) {
-      setAppointments(JSON.parse(savedAppointments));
-    }
+    const fetchAppointments = async () => {
+      const { data } = await supabase.from('appointments').select('*').order('createdAt', { ascending: false });
+      setAppointments(data || []);
+    };
+    fetchAppointments();
+
+    // Realtime subscription
+    const channel = supabase.channel('appointments-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => fetchAppointments())
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
   }, []);
 
-  // Persistence: Save appointments to localStorage on change
+  // Fetch hospitalInfo from Supabase with realtime
   useEffect(() => {
-    localStorage.setItem('appointments', JSON.stringify(appointments));
-  }, [appointments]);
+    const fetchHospitalInfo = async () => {
+      const { data } = await supabase.from('hospital_info').select('*').eq('id', 'info').single();
+      if (data) setHospitalInfo(data);
+    };
+    fetchHospitalInfo();
 
-  // Persistence: Load hospitalInfo from localStorage on mount
-  useEffect(() => {
-    const savedHospitalInfo = localStorage.getItem('hospitalInfo');
-    if (savedHospitalInfo) {
-      setHospitalInfo(JSON.parse(savedHospitalInfo));
-    }
+    // Realtime subscription
+    const channel = supabase.channel('hospital_info-changes')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'hospital_info' }, () => fetchHospitalInfo())
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
   }, []);
 
-  // Persistence: Save hospitalInfo to localStorage on change
-  useEffect(() => {
-    localStorage.setItem('hospitalInfo', JSON.stringify(hospitalInfo));
-  }, [hospitalInfo]);
-
-  // Handle CSV Import
+  // Handle CSV Import (add to Supabase)
   const handleCSVImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const csvText = e.target.result;
         const lines = csvText.split('\n').filter(line => line.trim());
@@ -83,7 +96,6 @@ export default function BatchAppointmentSystem() {
 
         const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
         
-        // Validate headers
         const expectedHeaders = ['patientname', 'patientphone', 'appointmentdate', 'appointmenttime', 'doctor', 'department', 'reason', 'specialinstructions'];
         const isValidCSV = expectedHeaders.every(header => headers.includes(header));
         
@@ -101,7 +113,6 @@ export default function BatchAppointmentSystem() {
           if (values.length < 8) continue;
 
           const appointment = {
-            id: Date.now() + i,
             patientName: values[0] || '',
             patientPhone: values[1] || '',
             appointmentDate: values[2] || '',
@@ -116,11 +127,14 @@ export default function BatchAppointmentSystem() {
           newAppointments.push(appointment);
         }
         
-        setAppointments(prev => [...prev, ...newAppointments]);
+        // Bulk insert to Supabase
+        const { error } = await supabase.from('appointments').insert(newAppointments);
+        if (error) throw error;
+        
         alert(`Successfully imported ${newAppointments.length} appointments`);
         
       } catch (error) {
-        alert('Error reading CSV file. Please check the format and try again.');
+        alert('Error reading CSV file or saving to database. Please check the format and try again.');
         console.error('CSV Import Error:', error);
       }
     };
@@ -166,7 +180,7 @@ export default function BatchAppointmentSystem() {
   };
 
   // Add single appointment
-  const handleAddAppointment = () => {
+  const handleAddAppointment = async () => {
     if (!currentAppointment.patientName || !currentAppointment.appointmentDate) {
       alert('Please fill in patient name and appointment date');
       return;
@@ -174,13 +188,16 @@ export default function BatchAppointmentSystem() {
 
     const newAppointment = {
       ...currentAppointment,
-      id: Date.now(),
       status: 'scheduled',
       createdAt: new Date().toISOString()
     };
 
-    setAppointments(prev => [...prev, newAppointment]);
-    
+    const { error } = await supabase.from('appointments').insert(newAppointment);
+    if (error) {
+      alert('Error adding appointment: ' + error.message);
+      return;
+    }
+
     // Reset form but stay on the same page
     setCurrentAppointment({
       patientName: '',
@@ -204,19 +221,21 @@ export default function BatchAppointmentSystem() {
   };
 
   // Update appointment
-  const handleUpdateAppointment = () => {
+  const handleUpdateAppointment = async () => {
     if (!currentAppointment.patientName || !currentAppointment.appointmentDate) {
       alert('Please fill in patient name and appointment date');
       return;
     }
 
-    setAppointments(prev => 
-      prev.map(apt => 
-        apt.id === editingAppointment.id 
-          ? { ...currentAppointment, id: apt.id, createdAt: apt.createdAt }
-          : apt
-      )
-    );
+    const { error } = await supabase
+      .from('appointments')
+      .update(currentAppointment)
+      .eq('id', editingAppointment.id);
+
+    if (error) {
+      alert('Error updating appointment: ' + error.message);
+      return;
+    }
 
     setEditingAppointment(null);
     setCurrentAppointment({
@@ -234,9 +253,13 @@ export default function BatchAppointmentSystem() {
   };
 
   // Delete appointment
-  const handleDeleteAppointment = (id) => {
+  const handleDeleteAppointment = async (id) => {
     if (window.confirm('Are you sure you want to delete this appointment?')) {
-      setAppointments(prev => prev.filter(apt => apt.id !== id));
+      const { error } = await supabase.from('appointments').delete().eq('id', id);
+      if (error) {
+        alert('Error deleting appointment: ' + error.message);
+        return;
+      }
       setSelectedAppointments(prev => {
         const newSelection = new Set(prev);
         newSelection.delete(id);
@@ -624,7 +647,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
               type="text"
               value={tempSettings.name}
               onChange={(e) => setTempSettings({ ...tempSettings, name: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               placeholder="Enter hospital name"
             />
           </div>
@@ -636,7 +659,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
             <textarea
               value={tempSettings.address}
               onChange={(e) => setTempSettings({ ...tempSettings, address: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               rows="2"
               placeholder="Enter full address"
             />
@@ -650,7 +673,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
               type="tel"
               value={tempSettings.phone}
               onChange={(e) => setTempSettings({ ...tempSettings, phone: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               placeholder="+234 XXX XXX XXXX"
             />
           </div>
@@ -692,10 +715,17 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
               Cancel
             </button>
             <button
-              onClick={() => {
-                setHospitalInfo(tempSettings);
-                setShowSettings(false);
-                alert('Settings saved successfully!');
+              onClick={async () => {
+                const { error } = await supabase
+                  .from('hospital_info')
+                  .update(tempSettings)
+                  .eq('id', 'info');
+                if (error) alert('Error saving settings: ' + error.message);
+                else {
+                  setHospitalInfo(tempSettings);
+                  setShowSettings(false);
+                  alert('Settings saved successfully!');
+                }
               }}
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
             >
@@ -943,7 +973,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pl-10"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pl-10"
                       placeholder="Search..."
                     />
                     <Search className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" />
@@ -957,7 +987,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                     type="date"
                     value={filterDate}
                     onChange={(e) => setFilterDate(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <button
@@ -1104,7 +1134,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                     type="text"
                     value={currentAppointment.patientName}
                     onChange={(e) => setCurrentAppointment({ ...currentAppointment, patientName: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     placeholder="Enter patient's full name"
                   />
                 </div>
@@ -1117,7 +1147,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                     type="tel"
                     value={currentAppointment.patientPhone}
                     onChange={(e) => setCurrentAppointment({ ...currentAppointment, patientPhone: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     placeholder="+234 XXX XXX XXXX"
                   />
                 </div>
@@ -1132,7 +1162,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                     type="date"
                     value={currentAppointment.appointmentDate}
                     onChange={(e) => setCurrentAppointment({ ...currentAppointment, appointmentDate: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </div>
 
@@ -1144,7 +1174,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                     type="time"
                     value={currentAppointment.appointmentTime}
                     onChange={(e) => setCurrentAppointment({ ...currentAppointment, appointmentTime: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </div>
               </div>
@@ -1157,7 +1187,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                   type="text"
                   value={currentAppointment.doctor}
                   onChange={(e) => setCurrentAppointment({ ...currentAppointment, doctor: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   placeholder="Dr. John Smith"
                 />
               </div>
@@ -1170,7 +1200,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                   type="text"
                   value={currentAppointment.department}
                   onChange={(e) => setCurrentAppointment({ ...currentAppointment, department: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   placeholder="e.g., Pediatrics, General Practice"
                 />
               </div>
@@ -1183,7 +1213,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                   type="text"
                   value={currentAppointment.reason}
                   onChange={(e) => setCurrentAppointment({ ...currentAppointment, reason: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   placeholder="Follow-up, Vaccination, Consultation, etc."
                 />
               </div>
@@ -1195,7 +1225,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                 <textarea
                   value={currentAppointment.specialInstructions}
                   onChange={(e) => setCurrentAppointment({ ...currentAppointment, specialInstructions: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   rows="3"
                   placeholder="e.g., Bring previous test results, Come fasting, etc."
                 />
@@ -1222,4 +1252,4 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
       </div>
     );
   }
-}
+         }
