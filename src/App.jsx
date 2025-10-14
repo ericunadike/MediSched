@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Clock, User, MapPin, Phone, Stethoscope, 
   Share2, Plus, Settings, Save, Upload, Download, 
   Users, Mail, Filter, Menu, X, ChevronDown,
-  FileUp, FileDown, Edit3, Trash2, Info
+  FileUp, FileDown, Edit3, Trash2, Info, Search
 } from 'lucide-react';
 
 export default function BatchAppointmentSystem() {
@@ -33,10 +33,37 @@ export default function BatchAppointmentSystem() {
   const [tempSettings, setTempSettings] = useState(hospitalInfo);
   const [selectedAppointments, setSelectedAppointments] = useState(new Set());
   const [filterDate, setFilterDate] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [showCSVInstructions, setShowCSVInstructions] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ sent: 0, total: 0, status: '' });
+
+  // Persistence: Load appointments from localStorage on mount
+  useEffect(() => {
+    const savedAppointments = localStorage.getItem('appointments');
+    if (savedAppointments) {
+      setAppointments(JSON.parse(savedAppointments));
+    }
+  }, []);
+
+  // Persistence: Save appointments to localStorage on change
+  useEffect(() => {
+    localStorage.setItem('appointments', JSON.stringify(appointments));
+  }, [appointments]);
+
+  // Persistence: Load hospitalInfo from localStorage on mount
+  useEffect(() => {
+    const savedHospitalInfo = localStorage.getItem('hospitalInfo');
+    if (savedHospitalInfo) {
+      setHospitalInfo(JSON.parse(savedHospitalInfo));
+    }
+  }, []);
+
+  // Persistence: Save hospitalInfo to localStorage on change
+  useEffect(() => {
+    localStorage.setItem('hospitalInfo', JSON.stringify(hospitalInfo));
+  }, [hospitalInfo]);
 
   // Handle CSV Import
   const handleCSVImport = (event) => {
@@ -219,7 +246,7 @@ export default function BatchAppointmentSystem() {
     }
   };
 
-  // Generate personalized message text with new format (WhatsApp Markdown)
+  // Generate personalized message text
   const generateMessageText = (appointment) => {
     const formattedDate = new Date(appointment.appointmentDate).toLocaleDateString('en-GB', {
       weekday: 'long',
@@ -475,10 +502,15 @@ ${hospitalInfo.name} Team
     setSelectedAppointments(newSelection);
   };
 
-  // Filter appointments by date
-  const filteredAppointments = filterDate 
-    ? appointments.filter(apt => apt.appointmentDate === filterDate)
-    : appointments;
+  // Filter appointments by date and search term
+  const filteredAppointments = appointments.filter(apt => {
+    const matchesDate = filterDate ? apt.appointmentDate === filterDate : true;
+    const matchesSearch = searchTerm ? 
+      apt.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      apt.patientPhone.includes(searchTerm) 
+      : true;
+    return matchesDate && matchesSearch;
+  });
 
   // CSV Instructions Modal
   const CSVInstructionsModal = () => (
@@ -899,9 +931,24 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
               </div>
             )}
 
-            {/* Filter Section */}
+            {/* Filter and Search Section */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
               <div className="flex flex-col md:flex-row gap-4 items-center">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Search by Name or Phone
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pl-10"
+                      placeholder="Search..."
+                    />
+                    <Search className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" />
+                  </div>
+                </div>
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Filter by Date
@@ -914,10 +961,13 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                   />
                 </div>
                 <button
-                  onClick={() => setFilterDate('')}
+                  onClick={() => {
+                    setFilterDate('');
+                    setSearchTerm('');
+                  }}
                   className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition duration-200 mt-6 md:mt-0"
                 >
-                  Clear Filter
+                  Clear Filters
                 </button>
               </div>
             </div>
