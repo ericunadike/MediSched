@@ -46,20 +46,25 @@ export default function BatchAppointmentSystem() {
   const [showCSVInstructions, setShowCSVInstructions] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ sent: 0, total: 0, status: '' });
 
+  const refreshAppointments = async () => {
+    const { data } = await supabase.from('appointments').select('*').order('createdAt', { ascending: false });
+    setAppointments(data || []);
+  };
+
   // Fetch appointments from Supabase with realtime
   useEffect(() => {
-    const fetchAppointments = async () => {
-      const { data } = await supabase.from('appointments').select('*').order('createdAt', { ascending: false });
-      setAppointments(data || []);
-    };
-    fetchAppointments();
+    refreshAppointments();
 
     // Realtime subscription
     const channel = supabase.channel('appointments-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => fetchAppointments())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
+        refreshAppointments();
+      })
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      channel.unsubscribe();
+    };
   }, []);
 
   // Fetch hospitalInfo from Supabase with realtime
@@ -77,6 +82,11 @@ export default function BatchAppointmentSystem() {
 
     return () => supabase.removeChannel(channel);
   }, []);
+
+  // Sync tempSettings when hospitalInfo changes
+  useEffect(() => {
+    setTempSettings(hospitalInfo);
+  }, [hospitalInfo]);
 
   // Handle CSV Import (add to Supabase)
   const handleCSVImport = (event) => {
@@ -618,10 +628,8 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
 
   // Settings Modal - FIXED
   const SettingsModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={(e) => {
-      if (e.target === e.currentTarget) setShowSettings(false);
-    }}>
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <div className="bg-blue-600 p-2 rounded-lg">
@@ -685,42 +693,24 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Primary Color
               </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={tempSettings.primaryColor}
-                  onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
-                  className="w-12 h-12 border border-gray-300 rounded-lg cursor-pointer"
-                />
-                <input
-                  type="text"
-                  value={tempSettings.primaryColor}
-                  onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-                  placeholder="#000000"
-                />
-              </div>
+              <input
+                type="color"
+                value={tempSettings.primaryColor}
+                onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
+                className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
+              />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Secondary Color
               </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={tempSettings.secondaryColor}
-                  onChange={(e) => setTempSettings({ ...tempSettings, secondaryColor: e.target.value })}
-                  className="w-12 h-12 border border-gray-300 rounded-lg cursor-pointer"
-                />
-                <input
-                  type="text"
-                  value={tempSettings.secondaryColor}
-                  onChange={(e) => setTempSettings({ ...tempSettings, secondaryColor: e.target.value })}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-                  placeholder="#000000"
-                />
-              </div>
+              <input
+                type="color"
+                value={tempSettings.secondaryColor}
+                onChange={(e) => setTempSettings({ ...tempSettings, secondaryColor: e.target.value })}
+                className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
+              />
             </div>
           </div>
 
@@ -774,6 +764,13 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
           </div>
         </div>
         <div className="p-4 space-y-2">
+          <button
+            onClick={() => { refreshAppointments(); setShowMobileMenu(false); }}
+            className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg transition duration-200"
+          >
+            <span className="text-xl">↻</span>
+            <span>Refresh</span>
+          </button>
           <button
             onClick={() => { setView('add-appointment'); setShowMobileMenu(false); }}
             className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg transition duration-200"
@@ -843,8 +840,13 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
               </div>
               
               <div className="flex items-center gap-3">
-                {/* Desktop Actions */}
-                <div className="hidden lg:flex items-center gap-3">
+              <div className="hidden lg:flex items-center gap-3">
+                  <button
+                    onClick={refreshAppointments}
+                    className="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-200 transition duration-200 flex items-center gap-2 shadow-sm"
+                  >
+                    ↻ Refresh
+                  </button>
                   <button
                     onClick={() => { setView('add-appointment'); setEditingAppointment(null); setCurrentAppointment({
                       patientName: '', patientPhone: '', appointmentDate: '', appointmentTime: '', doctor: '', department: '', reason: '', specialInstructions: ''
