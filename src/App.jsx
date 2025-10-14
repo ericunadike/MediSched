@@ -616,10 +616,12 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
     </div>
   );
 
-  // Settings Modal
+  // Settings Modal - FIXED
   const SettingsModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={(e) => {
+      if (e.target === e.currentTarget) setShowSettings(false);
+    }}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <div className="bg-blue-600 p-2 rounded-lg">
@@ -683,24 +685,42 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Primary Color
               </label>
-              <input
-                type="color"
-                value={tempSettings.primaryColor}
-                onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
-                className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={tempSettings.primaryColor}
+                  onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
+                  className="w-12 h-12 border border-gray-300 rounded-lg cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={tempSettings.primaryColor}
+                  onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                  placeholder="#000000"
+                />
+              </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Secondary Color
               </label>
-              <input
-                type="color"
-                value={tempSettings.secondaryColor}
-                onChange={(e) => setTempSettings({ ...tempSettings, secondaryColor: e.target.value })}
-                className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={tempSettings.secondaryColor}
+                  onChange={(e) => setTempSettings({ ...tempSettings, secondaryColor: e.target.value })}
+                  className="w-12 h-12 border border-gray-300 rounded-lg cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={tempSettings.secondaryColor}
+                  onChange={(e) => setTempSettings({ ...tempSettings, secondaryColor: e.target.value })}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                  placeholder="#000000"
+                />
+              </div>
             </div>
           </div>
 
@@ -1252,4 +1272,4 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
       </div>
     );
   }
-         }
+    }
