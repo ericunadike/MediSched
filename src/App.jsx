@@ -39,7 +39,8 @@ export default function BatchAppointmentSystem() {
   const [showSettings, setShowSettings] = useState(false);
   const [tempSettings, setTempSettings] = useState(hospitalInfo);
   const [selectedAppointments, setSelectedAppointments] = useState(new Set());
-  const [filterDate, setFilterDate] = useState('');
+  const [filterDateStart, setFilterDateStart] = useState('');
+  const [filterDateEnd, setFilterDateEnd] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
@@ -87,6 +88,82 @@ export default function BatchAppointmentSystem() {
   useEffect(() => {
     setTempSettings(hospitalInfo);
   }, [hospitalInfo]);
+
+  // Normalize phone number to WhatsApp format
+  const normalizePhoneNumber = (phone) => {
+    // Remove all non-digit characters
+    let digits = phone.replace(/\D/g, '');
+    
+    // Handle different formats:
+    // "08138983149" -> "2348138983149"
+    // "2348138983149" -> "2348138983149"
+    // "23408138983149" -> "2348138983149"
+    
+    if (digits.startsWith('0') && digits.length === 11) {
+      // Local format: 08138983149 -> 2348138983149
+      digits = '234' + digits.substring(1);
+    } else if (digits.startsWith('2340') && digits.length === 14) {
+      // Extra zero: 23408138983149 -> 2348138983149
+      digits = '234' + digits.substring(4);
+    }
+    // If already in format 234XXXXXXXXXX (13 digits), keep as is
+    
+    return digits;
+  };
+
+  // Generate personalized message text
+  const generateMessageText = (appointment) => {
+    const formattedDate = new Date(appointment.appointmentDate).toLocaleDateString('en-GB', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    
+    const [hours, minutes] = appointment.appointmentTime.split(':');
+    const timeObj = new Date(2000, 0, 1, hours, minutes);
+    const formattedTime = timeObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+    const specialInstructionsSection = appointment.specialInstructions 
+      ? `*Special Instructions:*\n${appointment.specialInstructions}\n`
+      : '';
+
+    return `
+Dear ${appointment.patientName},
+
+You have been scheduled for an appointment at *${hospitalInfo.name}*.
+
+*Appointment Details:*
+Date: ${formattedDate}
+Time: ${formattedTime}
+Doctor: ${appointment.doctor}
+Department: ${appointment.department}
+Reason: ${appointment.reason}
+
+${specialInstructionsSection}
+*Location:*
+${hospitalInfo.address}
+
+*Contact Us:*
+${hospitalInfo.phone}
+
+Please arrive 15 minutes before your scheduled time. If you need to reschedule, kindly contact us at least 24 hours in advance.
+
+We look forward to seeing you and providing you with the best care!
+
+Best regards,
+${hospitalInfo.name} Team
+    `.trim();
+  };
+
+  // Single appointment sharing
+  const shareSingleAppointment = (appointment) => {
+    const shareText = generateMessageText(appointment);
+    const phoneNumber = normalizePhoneNumber(appointment.patientPhone);
+    const windowName = `whatsapp_${appointment.id}_${Date.now()}`;
+    const whatsappURL = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(shareText)}`;
+    window.open(whatsappURL, windowName);
+  };
 
   // Handle CSV Import (add to Supabase)
   const handleCSVImport = (event) => {
@@ -166,16 +243,33 @@ export default function BatchAppointmentSystem() {
     const headers = ['PatientName', 'PatientPhone', 'AppointmentDate', 'AppointmentTime', 'Doctor', 'Department', 'Reason', 'SpecialInstructions'];
     const csvContent = [
       headers.join(','),
-      ...appointments.map(apt => [
-        `"${apt.patientName}"`,
-        `"${apt.patientPhone}"`,
-        `"${apt.appointmentDate}"`,
-        `"${apt.appointmentTime}"`,
-        `"${apt.doctor}"`,
-        `"${apt.department}"`,
-        `"${apt.reason}"`,
-        `"${apt.specialInstructions}"`
-      ].join(','))
+      ...appointments.map(apt => {
+        // Format date
+        const formattedDate = new Date(apt.appointmentDate).toLocaleDateString('en-GB', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+        
+        // Format time
+        let formattedTime = apt.appointmentTime;
+        if (apt.appointmentTime) {
+          const [hours, minutes] = apt.appointmentTime.split(':');
+          const timeObj = new Date(2000, 0, 1, hours, minutes);
+          formattedTime = timeObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
+        
+        return [
+          `"${apt.patientName}"`,
+          `"${apt.patientPhone}"`,
+          `"${formattedDate}"`,
+          `"${formattedTime}"`,
+          `"${apt.doctor}"`,
+          `"${apt.department}"`,
+          `"${apt.reason}"`,
+          `"${apt.specialInstructions}"`
+        ].join(',');
+      })
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -279,60 +373,6 @@ export default function BatchAppointmentSystem() {
     }
   };
 
-  // Generate personalized message text
-  const generateMessageText = (appointment) => {
-    const formattedDate = new Date(appointment.appointmentDate).toLocaleDateString('en-GB', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-    
-    const [hours, minutes] = appointment.appointmentTime.split(':');
-    const timeObj = new Date(2000, 0, 1, hours, minutes);
-    const formattedTime = timeObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-
-    const specialInstructionsSection = appointment.specialInstructions 
-      ? `*Special Instructions:*\n${appointment.specialInstructions}\n`
-      : '';
-
-    return `
-Dear ${appointment.patientName},
-
-You have been scheduled for an appointment at *${hospitalInfo.name}*.
-
-*Appointment Details:*
-Date: ${formattedDate}
-Time: ${formattedTime}
-Doctor: ${appointment.doctor}
-Department: ${appointment.department}
-Reason: ${appointment.reason}
-
-${specialInstructionsSection}
-*Location:*
-${hospitalInfo.address}
-
-*Contact Us:*
-${hospitalInfo.phone}
-
-Please arrive 15 minutes before your scheduled time. If you need to reschedule, kindly contact us at least 24 hours in advance.
-
-We look forward to seeing you and providing you with the best care!
-
-Best regards,
-${hospitalInfo.name} Team
-    `.trim();
-  };
-
-  // Single appointment sharing
-  const shareSingleAppointment = (appointment) => {
-    const shareText = generateMessageText(appointment);
-    const phoneNumber = appointment.patientPhone.replace(/\D/g, '');
-    const windowName = `whatsapp_${appointment.id}_${Date.now()}`;
-    const whatsappURL = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(shareText)}`;
-    window.open(whatsappURL, windowName);
-  };
-
   // Bulk sharing: Generates improved HTML with better logs
   const handleBulkShare = () => {
     if (selectedAppointments.size === 0) {
@@ -353,7 +393,7 @@ ${hospitalInfo.name} Team
     // Generate array of WhatsApp URLs with personalized messages
     const waLinks = selectedApts.map(appointment => {
       const shareText = generateMessageText(appointment);
-      const phoneNumber = appointment.patientPhone.replace(/\D/g, '');
+      const phoneNumber = normalizePhoneNumber(appointment.patientPhone);
       return { url: `https://wa.me/${phoneNumber}?text=${encodeURIComponent(shareText)}`, patientName: appointment.patientName };
     });
 
@@ -535,9 +575,25 @@ ${hospitalInfo.name} Team
     setSelectedAppointments(newSelection);
   };
 
-  // Filter appointments by date and search term
+  // Filter appointments by date range and search term
   const filteredAppointments = appointments.filter(apt => {
-    const matchesDate = filterDate ? apt.appointmentDate === filterDate : true;
+    let matchesDate = true;
+    
+    if (filterDateStart && filterDateEnd) {
+      const aptDate = new Date(apt.appointmentDate);
+      const startDate = new Date(filterDateStart);
+      const endDate = new Date(filterDateEnd);
+      matchesDate = aptDate >= startDate && aptDate <= endDate;
+    } else if (filterDateStart) {
+      const aptDate = new Date(apt.appointmentDate);
+      const startDate = new Date(filterDateStart);
+      matchesDate = aptDate >= startDate;
+    } else if (filterDateEnd) {
+      const aptDate = new Date(apt.appointmentDate);
+      const endDate = new Date(filterDateEnd);
+      matchesDate = aptDate <= endDate;
+    }
+    
     const matchesSearch = searchTerm ? 
       apt.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       apt.patientPhone.includes(searchTerm) 
@@ -627,126 +683,157 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
   );
 
   // Settings Modal - FIXED
-  const SettingsModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <Settings className="w-5 h-5 text-white" />
+  const SettingsModal = () => {
+    const handleSaveSettings = async () => {
+      try {
+        // First, check if hospital_info record exists
+        const { data: existingData, error: fetchError } = await supabase
+          .from('hospital_info')
+          .select('*')
+          .eq('id', 'info')
+          .single();
+
+        if (fetchError && fetchError.code === 'PGRST116') {
+          // Record doesn't exist, insert it
+          const { error: insertError } = await supabase
+            .from('hospital_info')
+            .insert({ id: 'info', ...tempSettings });
+          
+          if (insertError) throw insertError;
+        } else if (fetchError) {
+          throw fetchError;
+        } else {
+          // Record exists, update it
+          const { error: updateError } = await supabase
+            .from('hospital_info')
+            .update(tempSettings)
+            .eq('id', 'info');
+          
+          if (updateError) throw updateError;
+        }
+
+        setHospitalInfo(tempSettings);
+        setShowSettings(false);
+        alert('Settings saved successfully!');
+      } catch (error) {
+        console.error('Settings save error:', error);
+        alert('Error saving settings: ' + error.message);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-600 p-2 rounded-lg">
+                <Settings className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">Hospital Settings</h2>
+                <p className="text-gray-600 text-sm">Customize your hospital information</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-800">Hospital Settings</h2>
-              <p className="text-gray-600 text-sm">Customize your hospital information</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowSettings(false)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Hospital Name
-            </label>
-            <input
-              type="text"
-              value={tempSettings.name}
-              onChange={(e) => setTempSettings({ ...tempSettings, name: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              placeholder="Enter hospital name"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Hospital Address
-            </label>
-            <textarea
-              value={tempSettings.address}
-              onChange={(e) => setTempSettings({ ...tempSettings, address: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              rows="2"
-              placeholder="Enter full address"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Contact Phone Number
-            </label>
-            <input
-              type="tel"
-              value={tempSettings.phone}
-              onChange={(e) => setTempSettings({ ...tempSettings, phone: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              placeholder="+234 XXX XXX XXXX"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Primary Color
-              </label>
-              <input
-                type="color"
-                value={tempSettings.primaryColor}
-                onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
-                className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Secondary Color
-              </label>
-              <input
-                type="color"
-                value={tempSettings.secondaryColor}
-                onChange={(e) => setTempSettings({ ...tempSettings, secondaryColor: e.target.value })}
-                className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-4">
             <button
               onClick={() => {
                 setShowSettings(false);
                 setTempSettings(hospitalInfo);
               }}
-              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
+              className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
             >
-              Cancel
+              <X className="w-5 h-5 text-gray-500" />
             </button>
-            <button
-              onClick={async () => {
-                const { error } = await supabase
-                  .from('hospital_info')
-                  .update(tempSettings)
-                  .eq('id', 'info');
-                if (error) alert('Error saving settings: ' + error.message);
-                else {
-                  setHospitalInfo(tempSettings);
+          </div>
+
+          <div className="p-6 space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Hospital Name
+              </label>
+              <input
+                type="text"
+                value={tempSettings.name || ''}
+                onChange={(e) => setTempSettings({ ...tempSettings, name: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="Enter hospital name"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Hospital Address
+              </label>
+              <textarea
+                value={tempSettings.address || ''}
+                onChange={(e) => setTempSettings({ ...tempSettings, address: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                rows="2"
+                placeholder="Enter full address"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Contact Phone Number
+              </label>
+              <input
+                type="tel"
+                value={tempSettings.phone || ''}
+                onChange={(e) => setTempSettings({ ...tempSettings, phone: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="+234 XXX XXX XXXX"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Primary Color
+                </label>
+                <input
+                  type="color"
+                  value={tempSettings.primaryColor || '#2563eb'}
+                  onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
+                  className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Secondary Color
+                </label>
+                <input
+                  type="color"
+                  value={tempSettings.secondaryColor || '#4f46e5'}
+                  onChange={(e) => setTempSettings({ ...tempSettings, secondaryColor: e.target.value })}
+                  className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => {
                   setShowSettings(false);
-                  alert('Settings saved successfully!');
-                }
-              }}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
-            >
-              <Save className="w-5 h-5" />
-              Save Settings
-            </button>
+                  setTempSettings(hospitalInfo);
+                }}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSettings}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+              >
+                <Save className="w-5 h-5" />
+                Save Settings
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Mobile Menu
   const MobileMenu = () => (
@@ -985,7 +1072,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
 
             {/* Filter and Search Section */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
-              <div className="flex flex-col md:flex-row gap-4 items-center">
+              <div className="flex flex-col md:flex-row gap-4 items-end">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Search by Name or Phone
@@ -1003,21 +1090,33 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                 </div>
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Filter by Date
+                    Start Date
                   </label>
                   <input
                     type="date"
-                    value={filterDate}
-                    onChange={(e) => setFilterDate(e.target.value)}
+                    value={filterDateStart}
+                    onChange={(e) => setFilterDateStart(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={filterDateEnd}
+                    onChange={(e) => setFilterDateEnd(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <button
                   onClick={() => {
-                    setFilterDate('');
+                    setFilterDateStart('');
+                    setFilterDateEnd('');
                     setSearchTerm('');
                   }}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition duration-200 mt-6 md:mt-0"
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition duration-200"
                 >
                   Clear Filters
                 </button>
@@ -1119,8 +1218,8 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
   if (view === 'add-appointment') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-8">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
                 <div 
@@ -1274,4 +1373,4 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
       </div>
     );
   }
-    }
+      }
