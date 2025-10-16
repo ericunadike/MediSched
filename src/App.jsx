@@ -693,28 +693,48 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
           .eq('id', 'info')
           .single();
 
+        let saveError = null;
+        
         if (fetchError && fetchError.code === 'PGRST116') {
           // Record doesn't exist, insert it
           const { error: insertError } = await supabase
             .from('hospital_info')
-            .insert({ id: 'info', ...tempSettings });
+            .insert([{ 
+              id: 'info', 
+              name: tempSettings.name,
+              address: tempSettings.address,
+              phone: tempSettings.phone,
+              primaryColor: tempSettings.primaryColor,
+              secondaryColor: tempSettings.secondaryColor
+            }]);
           
-          if (insertError) throw insertError;
-        } else if (fetchError) {
-          throw fetchError;
-        } else {
+          saveError = insertError;
+        } else if (!fetchError) {
           // Record exists, update it
           const { error: updateError } = await supabase
             .from('hospital_info')
-            .update(tempSettings)
+            .update({
+              name: tempSettings.name,
+              address: tempSettings.address,
+              phone: tempSettings.phone,
+              primaryColor: tempSettings.primaryColor,
+              secondaryColor: tempSettings.secondaryColor
+            })
             .eq('id', 'info');
           
-          if (updateError) throw updateError;
+          saveError = updateError;
+        } else {
+          saveError = fetchError;
         }
 
-        setHospitalInfo(tempSettings);
-        setShowSettings(false);
-        alert('Settings saved successfully!');
+        if (saveError) {
+          console.error('Save error:', saveError);
+          alert('Error saving settings: ' + saveError.message);
+        } else {
+          setHospitalInfo({...tempSettings});
+          setShowSettings(false);
+          alert('Settings saved successfully!');
+        }
       } catch (error) {
         console.error('Settings save error:', error);
         alert('Error saving settings: ' + error.message);
@@ -737,7 +757,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
             <button
               onClick={() => {
                 setShowSettings(false);
-                setTempSettings(hospitalInfo);
+                setTempSettings({...hospitalInfo});
               }}
               className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
             >
@@ -752,7 +772,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
               </label>
               <input
                 type="text"
-                value={tempSettings.name || ''}
+                value={tempSettings.name}
                 onChange={(e) => setTempSettings({ ...tempSettings, name: e.target.value })}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 placeholder="Enter hospital name"
@@ -764,7 +784,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                 Hospital Address
               </label>
               <textarea
-                value={tempSettings.address || ''}
+                value={tempSettings.address}
                 onChange={(e) => setTempSettings({ ...tempSettings, address: e.target.value })}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 rows="2"
@@ -778,7 +798,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
               </label>
               <input
                 type="tel"
-                value={tempSettings.phone || ''}
+                value={tempSettings.phone}
                 onChange={(e) => setTempSettings({ ...tempSettings, phone: e.target.value })}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 placeholder="+234 XXX XXX XXXX"
@@ -792,7 +812,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                 </label>
                 <input
                   type="color"
-                  value={tempSettings.primaryColor || '#2563eb'}
+                  value={tempSettings.primaryColor}
                   onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
                   className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
                 />
@@ -804,7 +824,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
                 </label>
                 <input
                   type="color"
-                  value={tempSettings.secondaryColor || '#4f46e5'}
+                  value={tempSettings.secondaryColor}
                   onChange={(e) => setTempSettings({ ...tempSettings, secondaryColor: e.target.value })}
                   className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
                 />
@@ -815,7 +835,7 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
               <button
                 onClick={() => {
                   setShowSettings(false);
-                  setTempSettings(hospitalInfo);
+                  setTempSettings({...hospitalInfo});
                 }}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
               >
@@ -1219,7 +1239,8 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
-          <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
                 <div 
@@ -1373,4 +1394,6 @@ Michael Brown,+2348034567890,2024-01-16,14:30,Dr. Williams,Surgery,Follow-up,""`
       </div>
     );
   }
-      }
+
+  return null;
+}
