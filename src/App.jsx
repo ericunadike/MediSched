@@ -1583,7 +1583,7 @@ ${hospitalInfo.name} Team
               </button>
               
               {hospitalInfo.logo ? (
-                <img src={hospitalInfo.logo} alt="Hospital Logo" className="h-8 w-auto" />
+                <img src={hospitalInfo.logo} alt="Hospital Logo" className="h-logo-sm md:h-logo-md lg:h-logo-lg w-auto object-contain max-w-logo" />
               ) : (
                 <div className="bg-blue-600 p-2 rounded-lg">
                   <Stethoscope className="w-6 h-6 text-white" />
@@ -2281,7 +2281,7 @@ ${hospitalInfo.name} Team
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-4">
               {hospitalInfo.logo ? (
-                <img src={hospitalInfo.logo} alt="Hospital Logo" className="h-8 w-auto" />
+                <img src={hospitalInfo.logo} alt="Hospital Logo" className="h-logo-sm md:h-logo-md lg:h-logo-lg w-auto object-contain max-w-logo" />
               ) : (
                 <div className="bg-blue-600 p-2 rounded-lg">
                   <Stethoscope className="w-5 h-5 text-white" />
@@ -2361,5 +2361,6 @@ ${hospitalInfo.name} Team
 };
 
 export default HospitalAppointmentSystem;
+
 
 
