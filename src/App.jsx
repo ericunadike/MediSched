@@ -400,7 +400,7 @@ const SettingsModal = ({ tempSettings, setTempSettings, hospitalInfo, setHospita
       
       const { error: uploadError } = await supabase.storage
         .from('hospital-assets')
-        .upload(filePath, file);
+        .upload(filePath, file, { upsert: true });
         
       if (uploadError) {
         throw uploadError;
@@ -2361,4 +2361,5 @@ ${hospitalInfo.name} Team
 };
 
 export default HospitalAppointmentSystem;
+
 
