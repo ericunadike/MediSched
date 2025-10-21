@@ -1045,6 +1045,81 @@ ${hospitalInfo.name} Team
 };
 
 // ============================================================================
+// TOOLS DROPDOWN COMPONENT
+// ============================================================================
+
+const ToolsDropdown = ({ 
+  setShowStatistics, 
+  setShowCalendar, 
+  exportToCSV, 
+  importFromCSV, 
+  setShowCSVInstructions 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-200"
+      >
+        <span>Tools</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+          <button
+            onClick={() => { setShowStatistics(true); setIsOpen(false); }}
+            className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition duration-200"
+          >
+            <BarChart3 className="w-4 h-4" />
+            Statistics
+          </button>
+          
+          <button
+            onClick={() => { setShowCalendar(true); setIsOpen(false); }}
+            className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition duration-200"
+          >
+            <Calendar className="w-4 h-4" />
+            Calendar View
+          </button>
+          
+          <div className="border-t border-gray-200 my-1"></div>
+          
+          <button
+            onClick={() => { exportToCSV(); setIsOpen(false); }}
+            className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition duration-200"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
+          
+          <label className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition duration-200 cursor-pointer">
+            <Upload className="w-4 h-4" />
+            Import CSV
+            <input
+              type="file"
+              accept=".csv"
+              onChange={(e) => { importFromCSV(e); setIsOpen(false); }}
+              className="hidden"
+            />
+          </label>
+          
+          <button
+            onClick={() => { setShowCSVInstructions(true); setIsOpen(false); }}
+            className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition duration-200"
+          >
+            <Info className="w-4 h-4" />
+            CSV Instructions
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -1069,7 +1144,7 @@ const HospitalAppointmentSystem = () => {
   const [bulkProgress, setBulkProgress] = useState({ sent: 0, total: 0, status: '' });
   
   const [hospitalInfo, setHospitalInfo] = useState({
-    name: 'MediCare General Hospital',
+    name: 'Magodo Specialist Hospital Ltd.',
     address: '123 Healthcare Avenue, Medical District, Lagos, Nigeria',
     phone: '+234 800 123 4567',
     logo: '',
@@ -1498,6 +1573,7 @@ ${hospitalInfo.name} Team
       <nav className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
+            {/* Left: Logo & Hospital Name */}
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -1520,6 +1596,7 @@ ${hospitalInfo.name} Team
               </div>
             </div>
 
+            {/* Center: Navigation Links */}
             <div className="hidden lg:flex items-center gap-6">
               <button
                 onClick={() => setView('dashboard')}
@@ -1541,33 +1618,29 @@ ${hospitalInfo.name} Team
               >
                 Appointments
               </button>
-              <button
-                onClick={() => { setView('add-appointment'); resetForm(); }}
-                className={`px-3 py-2 rounded-lg font-medium transition duration-200 ${
-                  view === 'add-appointment' 
-                    ? 'bg-blue-100 text-blue-700' 
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                New Appointment
-              </button>
             </div>
 
+            {/* Right: Actions */}
             <div className="flex items-center gap-3">
+              {/* Primary Action */}
               <button
-                onClick={() => setShowStatistics(true)}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
-                title="View Statistics"
+                onClick={() => { setView('add-appointment'); resetForm(); }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition duration-200"
               >
-                <BarChart3 className="w-5 h-5" />
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">New Appointment</span>
               </button>
-              <button
-                onClick={() => setShowCalendar(true)}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
-                title="Calendar View"
-              >
-                <Calendar className="w-5 h-5" />
-              </button>
+
+              {/* Tools Dropdown */}
+              <ToolsDropdown
+                setShowStatistics={setShowStatistics}
+                setShowCalendar={setShowCalendar}
+                exportToCSV={exportToCSV}
+                importFromCSV={importFromCSV}
+                setShowCSVInstructions={setShowCSVInstructions}
+              />
+
+              {/* Settings */}
               <button
                 onClick={() => setShowSettings(true)}
                 className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
@@ -1613,6 +1686,47 @@ ${hospitalInfo.name} Team
               >
                 New Appointment
               </button>
+              
+              <div className="border-t border-gray-200 pt-2 mt-2">
+                <button
+                  onClick={() => { setShowStatistics(true); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-3 w-full px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  Statistics
+                </button>
+                <button
+                  onClick={() => { setShowCalendar(true); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-3 w-full px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
+                >
+                  <Calendar className="w-4 h-4" />
+                  Calendar View
+                </button>
+                <button
+                  onClick={() => { exportToCSV(); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-3 w-full px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
+                >
+                  <Download className="w-4 h-4" />
+                  Export CSV
+                </button>
+                <label className="flex items-center gap-3 w-full px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200 cursor-pointer">
+                  <Upload className="w-4 h-4" />
+                  Import CSV
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={(e) => { importFromCSV(e); setMobileMenuOpen(false); }}
+                    className="hidden"
+                  />
+                </label>
+                <button
+                  onClick={() => { setShowCSVInstructions(true); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-3 w-full px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
+                >
+                  <Info className="w-4 h-4" />
+                  CSV Instructions
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1626,32 +1740,6 @@ ${hospitalInfo.name} Team
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
                 <p className="text-gray-600">Welcome to your appointment management system</p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={exportToCSV}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-200"
-                >
-                  <Download className="w-4 h-4" />
-                  Export CSV
-                </button>
-                <label className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-200 cursor-pointer">
-                  <Upload className="w-4 h-4" />
-                  Import CSV
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={importFromCSV}
-                    className="hidden"
-                  />
-                </label>
-                <button
-                  onClick={() => setShowCSVInstructions(true)}
-                  className="p-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-200"
-                  title="CSV Instructions"
-                >
-                  <Info className="w-4 h-4" />
-                </button>
               </div>
             </div>
 
