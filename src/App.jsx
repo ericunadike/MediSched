@@ -772,7 +772,6 @@ const HospitalAppointmentSystem = () => {
       setAppointments(data || []);
     } catch (error) {
       console.error('Error fetching appointments:', error);
-      alert('Error loading appointments: ' + error.message);
     }
   };
 
@@ -989,7 +988,7 @@ const HospitalAppointmentSystem = () => {
               specialInstructions: appointment.specialinstructions || '',
               status: 'scheduled',
               patientResponse: '',
-              created_at: new Date()
+              createdAt: new Date()
             });
           }
         }
@@ -1716,4 +1715,3 @@ const HospitalAppointmentSystem = () => {
 };
 
 export default HospitalAppointmentSystem;
-
