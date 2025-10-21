@@ -856,7 +856,7 @@ ${hospitalInfo.name} Team
     const checkConnection = document.getElementById('checkConnection');
 
     function updateProgress() {
-      progress.textContent = \\`Progress: \\${currentIndex} / \\${links.length} tabs opened\\`;
+      progress.textContent = `Progress: ${currentIndex} / ${links.length} tabs opened`;
     }
 
     function appendLog(message, isError = false) {
@@ -2269,3 +2269,4 @@ ${hospitalInfo.name} Team
 };
 
 export default HospitalAppointmentSystem;
+
