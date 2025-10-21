@@ -787,6 +787,11 @@ ${hospitalInfo.name} Team
   const generateWhatsAppAutoOpener = () => {
     const selectedApts = appointments.filter(apt => selectedAppointments.has(apt.id));
     
+    if (selectedApts.length === 0) {
+      alert('No appointments selected');
+      return;
+    }
+
     // Generate array of WhatsApp URLs with personalized messages
     const waLinks = selectedApts.map(appointment => {
       const shareText = generateMessageText(appointment);
@@ -797,8 +802,8 @@ ${hospitalInfo.name} Team
       };
     });
 
-    const htmlContent = `
-<!DOCTYPE html>
+    // FIXED: Properly escaped template literals for the HTML content
+    const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -856,12 +861,12 @@ ${hospitalInfo.name} Team
     const checkConnection = document.getElementById('checkConnection');
 
     function updateProgress() {
-      progress.textContent = `Progress: ${currentIndex} / ${links.length} tabs opened`;
+      progress.textContent = 'Progress: ' + currentIndex + ' / ' + links.length + ' tabs opened';
     }
 
     function appendLog(message, isError = false) {
       const timestamp = new Date().toLocaleTimeString();
-      log.textContent += \\`\\${timestamp} - \\${message}\\${isError ? ' (ERROR)' : ''}\\\\n\\`;
+      log.textContent += timestamp + ' - ' + message + (isError ? ' (ERROR)' : '') + '\\n';
       log.scrollTop = log.scrollHeight;
     }
 
@@ -871,7 +876,7 @@ ${hospitalInfo.name} Team
       const item = links[currentIndex];
       const win = window.open(item.url, '_blank');
       if (win) {
-        appendLog(\\`Opened tab for \\${item.patientName || 'Patient ' + (currentIndex + 1)}\\`);
+        appendLog('Opened tab for ' + (item.patientName || 'Patient ' + (currentIndex + 1)));
       } else {
         appendLog('Failed to open tab - popup blocked?', true);
       }
@@ -908,7 +913,7 @@ ${hospitalInfo.name} Team
         delayInput.value = 5000;
       }
       intervalId = setInterval(sendNext, delay);
-      appendLog(\\`Started opening with \\${delay}ms delay. Manually send in tabs!\\`);
+      appendLog('Started opening with ' + delay + 'ms delay. Manually send in tabs!');
       startBtn.disabled = true;
       pauseBtn.disabled = false;
       resumeBtn.disabled = true;
@@ -935,8 +940,7 @@ ${hospitalInfo.name} Team
     });
   </script>
 </body>
-</html>
-`;
+</html>`;
 
     // Download the HTML file
     const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
@@ -2269,4 +2273,3 @@ ${hospitalInfo.name} Team
 };
 
 export default HospitalAppointmentSystem;
-
