@@ -1145,10 +1145,10 @@ const HospitalAppointmentSystem = () => {
   
   const [hospitalInfo, setHospitalInfo] = useState({
     name: 'Magodo Specialist Hospital Ltd.',
-    address: '123 Healthcare Avenue, Medical District, Lagos, Nigeria',
-    phone: '+234 800 123 4567',
+    address: '10 Jaiye Oyedotun, Magodo G.R.A Phase II, Lagos, Nigeria',
+    phone: '+234 706 756 8895',
     logo: '',
-    primaryColor: '#2563eb'
+    primaryColor: '0000f9'
   });
   const [tempSettings, setTempSettings] = useState({...hospitalInfo});
 
@@ -2298,7 +2298,7 @@ ${hospitalInfo.name} Team
           </div>
           <div className="mt-8 pt-8 border-t border-gray-200 text-center">
             <p className="text-sm text-gray-500">
-              © 2024 Hospital Appointment Management System. All rights reserved.
+              © 2025 Awesome Inc. All rights reserved.
             </p>
           </div>
         </div>
@@ -2361,3 +2361,4 @@ ${hospitalInfo.name} Team
 };
 
 export default HospitalAppointmentSystem;
+
