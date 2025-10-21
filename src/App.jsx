@@ -845,7 +845,7 @@ const HospitalAppointmentSystem = () => {
       } else {
         const { data, error } = await supabase
           .from('appointments')
-          .insert([{ ...formData, created_at: new Date() }])
+          .insert([{ ...formData, createdAt: new Date() }])
           .select();
 
         if (error) throw error;
@@ -888,7 +888,7 @@ const HospitalAppointmentSystem = () => {
         .update({ 
           status, 
           patientResponse: response,
-          updated_at: new Date()
+          updatedAt: new Date()
         })
         .eq('id', id);
 
@@ -1716,3 +1716,4 @@ const HospitalAppointmentSystem = () => {
 };
 
 export default HospitalAppointmentSystem;
+
