@@ -708,6 +708,339 @@ Jane Smith,+2348023456789,2024-01-15,10:00,Dr. Johnson,General,Check-up,"Come fa
 );
 
 // ============================================================================
+// WHATSAPP BULK MESSAGING COMPONENTS
+// ============================================================================
+
+const WhatsAppBulkModal = ({ 
+  selectedAppointments, 
+  appointments, 
+  hospitalInfo, 
+  setShowBulkWhatsApp,
+  bulkProgress,
+  setBulkProgress 
+}) => {
+  const [delay, setDelay] = useState(15000);
+
+  // Normalize phone number to WhatsApp format
+  const normalizePhoneNumber = (phone) => {
+    let digits = phone.replace(/\D/g, '');
+    
+    if (digits.startsWith('0') && digits.length === 11) {
+      digits = '234' + digits.substring(1);
+    } else if (digits.startsWith('2340') && digits.length === 14) {
+      digits = '234' + digits.substring(4);
+    }
+    
+    return digits;
+  };
+
+  // Generate personalized message text
+  const generateMessageText = (appointment) => {
+    const formattedDate = new Date(appointment.appointmentDate).toLocaleDateString('en-GB', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    
+    const [hours, minutes] = appointment.appointmentTime.split(':');
+    const timeObj = new Date(2000, 0, 1, hours, minutes);
+    const formattedTime = timeObj.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      hour12: true 
+    });
+
+    const specialInstructionsSection = appointment.specialInstructions 
+      ? `*Special Instructions:*\n${appointment.specialInstructions}\n`
+      : '';
+
+    return `
+Dear ${appointment.patientName},
+
+You have been scheduled for an appointment at *${hospitalInfo.name}*.
+
+*Appointment Details:*
+Date: ${formattedDate}
+Time: ${formattedTime}
+Doctor: ${appointment.doctor}
+Department: ${appointment.department}
+Reason: ${appointment.reason}
+
+${specialInstructionsSection}
+*Location:*
+${hospitalInfo.address}
+
+*Contact Us:*
+${hospitalInfo.phone}
+
+Please arrive 15 minutes before your scheduled time. If you need to reschedule, kindly contact us at least 24 hours in advance.
+
+We look forward to seeing you and providing you with the best care!
+
+Best regards,
+${hospitalInfo.name} Team
+    `.trim();
+  };
+
+  // Generate WhatsApp auto-opener HTML
+  const generateWhatsAppAutoOpener = () => {
+    const selectedApts = appointments.filter(apt => selectedAppointments.has(apt.id));
+    
+    // Generate array of WhatsApp URLs with personalized messages
+    const waLinks = selectedApts.map(appointment => {
+      const shareText = generateMessageText(appointment);
+      const phoneNumber = normalizePhoneNumber(appointment.patientPhone);
+      return { 
+        url: `https://wa.me/${phoneNumber}?text=${encodeURIComponent(shareText)}`, 
+        patientName: appointment.patientName 
+      };
+    });
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Auto-Opener - ${hospitalInfo.name}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f0f0f0; max-width: 800px; margin: 0 auto; }
+    h1 { color: #2563eb; }
+    .instructions { background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffeaa7; }
+    #controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    button { padding: 10px 20px; background: #25D366; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #128C7E; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    #progress { font-weight: bold; margin-bottom: 20px; color: #d35400; }
+    #log { background: white; padding: 15px; border: 1px solid #ddd; border-radius: 8px; height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>WhatsApp Auto-Opener for ${selectedApts.length} Appointments</h1>
+  <div class="instructions">
+    <p><strong>IMPORTANT NOTES:</strong></p>
+    <ul>
+      <li><strong>Login First:</strong> Open <a href="https://web.whatsapp.com" target="_blank">web.whatsapp.com</a> in another tab and scan the QR code with your WhatsApp app. Refresh if not connected.</li>
+      <li><strong>No Auto-Send:</strong> This only OPENS pre-filled chats. You MUST manually click "Send" in each tab—WhatsApp blocks automation.</li>
+      <li><strong>Delay:</strong> Use 10000-30000ms to avoid bans. Start small!</li>
+      <li><strong>Troubleshooting:</strong> If tabs don't open: Disable popup blocker (browser settings). Check console (F12) for errors.</li>
+      <li><strong>Progress:</strong> Watch the log below. Each open is logged with patient name.</li>
+    </ul>
+  </div>
+  
+  <div id="controls">
+    <button id="checkConnection">Check WhatsApp Connection</button>
+    <button id="startBtn">Start Opening Tabs</button>
+    <button id="pauseBtn" disabled>Pause</button>
+    <button id="resumeBtn" disabled>Resume</button>
+    <label>Delay (ms): <input type="number" id="delayInput" value="${delay}" min="5000" step="1000"></label>
+  </div>
+  
+  <div id="progress">Progress: 0 / ${selectedApts.length}</div>
+  <div id="log">Ready. Click 'Check WhatsApp Connection' first!\\n</div>
+
+  <script>
+    const links = ${JSON.stringify(waLinks)};
+    let currentIndex = 0;
+    let intervalId = null;
+    let isPaused = false;
+
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const delayInput = document.getElementById('delayInput');
+    const progress = document.getElementById('progress');
+    const log = document.getElementById('log');
+    const checkConnection = document.getElementById('checkConnection');
+
+    function updateProgress() {
+      progress.textContent = \\`Progress: \\${currentIndex} / \\${links.length} tabs opened\\`;
+    }
+
+    function appendLog(message, isError = false) {
+      const timestamp = new Date().toLocaleTimeString();
+      log.textContent += \\`\\${timestamp} - \\${message}\\${isError ? ' (ERROR)' : ''}\\\\n\\`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function sendNext() {
+      if (currentIndex >= links.length || isPaused) return;
+
+      const item = links[currentIndex];
+      const win = window.open(item.url, '_blank');
+      if (win) {
+        appendLog(\\`Opened tab for \\${item.patientName || 'Patient ' + (currentIndex + 1)}\\`);
+      } else {
+        appendLog('Failed to open tab - popup blocked?', true);
+      }
+      currentIndex++;
+      updateProgress();
+
+      if (currentIndex >= links.length) {
+        appendLog('All tabs opened! Now manually send in each.');
+        clearInterval(intervalId);
+        startBtn.disabled = false;
+        pauseBtn.disabled = true;
+        resumeBtn.disabled = true;
+      }
+    }
+
+    checkConnection.addEventListener('click', () => {
+      const testWin = window.open('https://web.whatsapp.com', '_blank');
+      if (testWin) {
+        appendLog('Test tab opened - check if WhatsApp Web is logged in there.');
+      } else {
+        appendLog('Popup blocked - allow popups in browser settings.', true);
+      }
+    });
+
+    startBtn.addEventListener('click', () => {
+      if (currentIndex >= links.length) {
+        currentIndex = 0;
+        updateProgress();
+        appendLog('Resetting...');
+      }
+      const delay = parseInt(delayInput.value) || 15000;
+      if (delay < 5000) {
+        appendLog('Delay too low - increased to 5000ms for safety.', true);
+        delayInput.value = 5000;
+      }
+      intervalId = setInterval(sendNext, delay);
+      appendLog(\\`Started opening with \\${delay}ms delay. Manually send in tabs!\\`);
+      startBtn.disabled = true;
+      pauseBtn.disabled = false;
+      resumeBtn.disabled = true;
+      isPaused = false;
+    });
+
+    pauseBtn.addEventListener('click', () => {
+      isPaused = true;
+      clearInterval(intervalId);
+      appendLog('Paused - resume or close tabs.');
+      startBtn.disabled = false;
+      pauseBtn.disabled = true;
+      resumeBtn.disabled = false;
+    });
+
+    resumeBtn.addEventListener('click', () => {
+      const delay = parseInt(delayInput.value) || 15000;
+      intervalId = setInterval(sendNext, delay);
+      appendLog('Resumed opening.');
+      startBtn.disabled = true;
+      pauseBtn.disabled = false;
+      resumeBtn.disabled = true;
+      isPaused = false;
+    });
+  </script>
+</body>
+</html>
+`;
+
+    // Download the HTML file
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `whatsapp-auto-opener-${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    setBulkProgress({ 
+      sent: selectedApts.length, 
+      total: selectedApts.length, 
+      status: 'Auto-opener generated! Download complete.' 
+    });
+    
+    setTimeout(() => {
+      setBulkProgress({ sent: 0, total: 0, status: '' });
+      setShowBulkWhatsApp(false);
+    }, 3000);
+  };
+
+  const selectedCount = Array.from(selectedAppointments).length;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="bg-green-600 p-2 rounded-lg">
+              <Share2 className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-800">Bulk WhatsApp Messages</h2>
+              <p className="text-gray-600 text-sm">Generate auto-opener for {selectedCount} appointments</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowBulkWhatsApp(false)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="font-semibold text-blue-800 mb-2">How it works:</h3>
+            <ul className="text-sm text-blue-700 space-y-1">
+              <li>• Generates an HTML file with all WhatsApp links</li>
+              <li>• Opens tabs automatically with delays to avoid bans</li>
+              <li>• You must manually click "Send" in each WhatsApp tab</li>
+              <li>• Requires WhatsApp Web to be logged in</li>
+            </ul>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Delay between tabs (milliseconds)
+            </label>
+            <input
+              type="number"
+              value={delay}
+              onChange={(e) => setDelay(parseInt(e.target.value) || 15000)}
+              min="5000"
+              step="1000"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              placeholder="15000"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Recommended: 15000ms (15 seconds). Lower values may trigger WhatsApp limits.
+            </p>
+          </div>
+
+          {bulkProgress.status && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p className="text-green-700 text-sm">{bulkProgress.status}</p>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={() => setShowBulkWhatsApp(false)}
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={generateWhatsAppAutoOpener}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+            >
+              <Download className="w-5 h-5" />
+              Generate Auto-Opener
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -725,8 +1058,12 @@ const HospitalAppointmentSystem = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCSVInstructions, setShowCSVInstructions] = useState(false);
+  const [showBulkWhatsApp, setShowBulkWhatsApp] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedAppointments, setSelectedAppointments] = useState(new Set());
+  const [bulkProgress, setBulkProgress] = useState({ sent: 0, total: 0, status: '' });
+  
   const [hospitalInfo, setHospitalInfo] = useState({
     name: 'MediCare General Hospital',
     address: '123 Healthcare Avenue, Medical District, Lagos, Nigeria',
@@ -873,6 +1210,11 @@ const HospitalAppointmentSystem = () => {
       if (error) throw error;
       
       setAppointments(prev => prev.filter(apt => apt.id !== id));
+      setSelectedAppointments(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
       alert('Appointment deleted successfully!');
     } catch (error) {
       console.error('Error deleting appointment:', error);
@@ -918,6 +1260,94 @@ const HospitalAppointmentSystem = () => {
     setEditingAppointment(appointment);
     setCurrentAppointment(appointment);
     setView('add-appointment');
+  };
+
+  // WhatsApp Functions
+  const normalizePhoneNumber = (phone) => {
+    let digits = phone.replace(/\D/g, '');
+    
+    if (digits.startsWith('0') && digits.length === 11) {
+      digits = '234' + digits.substring(1);
+    } else if (digits.startsWith('2340') && digits.length === 14) {
+      digits = '234' + digits.substring(4);
+    }
+    
+    return digits;
+  };
+
+  const generateMessageText = (appointment) => {
+    const formattedDate = new Date(appointment.appointmentDate).toLocaleDateString('en-GB', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    
+    const [hours, minutes] = appointment.appointmentTime.split(':');
+    const timeObj = new Date(2000, 0, 1, hours, minutes);
+    const formattedTime = timeObj.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      hour12: true 
+    });
+
+    const specialInstructionsSection = appointment.specialInstructions 
+      ? `*Special Instructions:*\n${appointment.specialInstructions}\n`
+      : '';
+
+    return `
+Dear ${appointment.patientName},
+
+You have been scheduled for an appointment at *${hospitalInfo.name}*.
+
+*Appointment Details:*
+Date: ${formattedDate}
+Time: ${formattedTime}
+Doctor: ${appointment.doctor}
+Department: ${appointment.department}
+Reason: ${appointment.reason}
+
+${specialInstructionsSection}
+*Location:*
+${hospitalInfo.address}
+
+*Contact Us:*
+${hospitalInfo.phone}
+
+Please arrive 15 minutes before your scheduled time. If you need to reschedule, kindly contact us at least 24 hours in advance.
+
+We look forward to seeing you and providing you with the best care!
+
+Best regards,
+${hospitalInfo.name} Team
+    `.trim();
+  };
+
+  const shareSingleAppointment = (appointment) => {
+    const shareText = generateMessageText(appointment);
+    const phoneNumber = normalizePhoneNumber(appointment.patientPhone);
+    const windowName = `whatsapp_${appointment.id}_${Date.now()}`;
+    const whatsappURL = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(shareText)}`;
+    window.open(whatsappURL, windowName);
+  };
+
+  // Selection functions
+  const toggleSelectAll = () => {
+    if (selectedAppointments.size === filteredAppointments.length) {
+      setSelectedAppointments(new Set());
+    } else {
+      setSelectedAppointments(new Set(filteredAppointments.map(apt => apt.id)));
+    }
+  };
+
+  const toggleAppointmentSelection = (id) => {
+    const newSelection = new Set(selectedAppointments);
+    if (newSelection.has(id)) {
+      newSelection.delete(id);
+    } else {
+      newSelection.add(id);
+    }
+    setSelectedAppointments(newSelection);
   };
 
   // Import/Export functions
@@ -1042,9 +1472,10 @@ const HospitalAppointmentSystem = () => {
       total: appointments.length,
       today: todayAppointments.length,
       scheduled: appointments.filter(a => a.status === 'scheduled').length,
-      confirmed: appointments.filter(a => a.status === 'confirmed').length
+      confirmed: appointments.filter(a => a.status === 'confirmed').length,
+      selected: selectedAppointments.size
     };
-  }, [appointments]);
+  }, [appointments, selectedAppointments]);
 
   if (loading) {
     return (
@@ -1221,7 +1652,7 @@ const HospitalAppointmentSystem = () => {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1269,12 +1700,56 @@ const HospitalAppointmentSystem = () => {
                   </div>
                 </div>
               </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Selected</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">{dashboardStats.selected}</p>
+                  </div>
+                  <div className="bg-purple-100 p-3 rounded-xl">
+                    <Mail className="w-6 h-6 text-purple-600" />
+                  </div>
+                </div>
+              </div>
             </div>
+
+            {/* Bulk WhatsApp Button */}
+            {selectedAppointments.size > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Bulk WhatsApp Messages</h3>
+                    <p className="text-gray-600">
+                      {selectedAppointments.size} appointment{selectedAppointments.size > 1 ? 's' : ''} selected for messaging
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowBulkWhatsApp(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 flex items-center gap-2"
+                  >
+                    <Share2 className="w-5 h-5" />
+                    Generate WhatsApp Auto-Opener
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Recent Appointments */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
               <div className="p-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Recent Appointments</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">Recent Appointments</h3>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedAppointments.size === filteredAppointments.length && filteredAppointments.length > 0}
+                      onChange={toggleSelectAll}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-600">Select All</span>
+                  </div>
+                </div>
               </div>
               <div className="p-6">
                 {filteredAppointments.slice(0, 5).length > 0 ? (
@@ -1282,6 +1757,12 @@ const HospitalAppointmentSystem = () => {
                     {filteredAppointments.slice(0, 5).map(appointment => (
                       <div key={appointment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                         <div className="flex items-center gap-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedAppointments.has(appointment.id)}
+                            onChange={() => toggleAppointmentSelection(appointment.id)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
                           <div className="bg-white p-2 rounded-lg">
                             <User className="w-5 h-5 text-gray-600" />
                           </div>
@@ -1290,9 +1771,18 @@ const HospitalAppointmentSystem = () => {
                             <p className="text-sm text-gray-600">{appointment.doctor} • {appointment.department}</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-medium text-gray-900">{appointment.appointmentDate}</p>
-                          <p className="text-sm text-gray-600">{appointment.appointmentTime}</p>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="font-medium text-gray-900">{appointment.appointmentDate}</p>
+                            <p className="text-sm text-gray-600">{appointment.appointmentTime}</p>
+                          </div>
+                          <button
+                            onClick={() => shareSingleAppointment(appointment)}
+                            className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition duration-200"
+                            title="Share via WhatsApp"
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1324,9 +1814,30 @@ const HospitalAppointmentSystem = () => {
               </div>
             </div>
 
+            {/* Bulk WhatsApp Button */}
+            {selectedAppointments.size > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Bulk WhatsApp Messages</h3>
+                    <p className="text-gray-600">
+                      {selectedAppointments.size} appointment{selectedAppointments.size > 1 ? 's' : ''} selected
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowBulkWhatsApp(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 flex items-center gap-2"
+                  >
+                    <Share2 className="w-5 h-5" />
+                    Generate WhatsApp Auto-Opener
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Filters */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
                   <div className="relative">
@@ -1366,6 +1877,15 @@ const HospitalAppointmentSystem = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </div>
+
+                <div className="flex items-end">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition duration-200"
+                  >
+                    {selectedAppointments.size === filteredAppointments.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1375,6 +1895,14 @@ const HospitalAppointmentSystem = () => {
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <input
+                          type="checkbox"
+                          checked={selectedAppointments.size === filteredAppointments.length && filteredAppointments.length > 0}
+                          onChange={toggleSelectAll}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Doctor</th>
@@ -1386,6 +1914,14 @@ const HospitalAppointmentSystem = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredAppointments.map(appointment => (
                       <tr key={appointment.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={selectedAppointments.has(appointment.id)}
+                            onChange={() => toggleAppointmentSelection(appointment.id)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
                             <div className="text-sm font-medium text-gray-900">{appointment.patientName}</div>
@@ -1403,6 +1939,13 @@ const HospitalAppointmentSystem = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => shareSingleAppointment(appointment)}
+                              className="text-green-600 hover:text-green-900 p-1"
+                              title="Share via WhatsApp"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => handleEditAppointment(appointment)}
                               className="text-blue-600 hover:text-blue-900 p-1"
@@ -1708,6 +2251,17 @@ const HospitalAppointmentSystem = () => {
       {showCSVInstructions && (
         <CSVInstructionsModal
           setShowCSVInstructions={setShowCSVInstructions}
+        />
+      )}
+
+      {showBulkWhatsApp && (
+        <WhatsAppBulkModal
+          selectedAppointments={selectedAppointments}
+          appointments={appointments}
+          hospitalInfo={hospitalInfo}
+          setShowBulkWhatsApp={setShowBulkWhatsApp}
+          bulkProgress={bulkProgress}
+          setBulkProgress={setBulkProgress}
         />
       )}
     </div>
