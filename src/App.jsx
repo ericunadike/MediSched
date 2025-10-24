@@ -4,13 +4,151 @@ import {
   Share2, Plus, Settings, Save, Upload, Download, 
   Users, Mail, Filter, Menu, X, ChevronDown, ChevronLeft, ChevronRight,
   FileUp, FileDown, Edit3, Trash2, Info, Search, Check, XCircle,
-  AlertCircle, Image, BarChart3, TrendingUp, Activity
+  AlertCircle, Image, BarChart3, TrendingUp, Activity,
+  LogOut, History, UserPlus
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// ============================================================================
+// AUTHENTICATION COMPONENT
+// ============================================================================
+
+const LoginPage = ({ hospitalInfo, onLogin }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+      
+      onLogin(data.user);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="flex justify-center">
+          {hospitalInfo.logo ? (
+            <img 
+              src={hospitalInfo.logo} 
+              alt="Hospital Logo" 
+              className="h-16 w-auto"
+            />
+          ) : (
+            <div className="bg-blue-600 p-3 rounded-xl">
+              <Stethoscope className="w-8 h-8 text-white" />
+            </div>
+          )}
+        </div>
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          {hospitalInfo.name}
+        </h2>
+        <p className="mt-2 text-center text-sm text-gray-600">
+          Appointment Management System
+        </p>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+          <form className="space-y-6" onSubmit={handleLogin}>
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                <div className="flex">
+                  <AlertCircle className="h-5 w-5 text-red-400" />
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800">
+                      Authentication Error
+                    </h3>
+                    <p className="text-sm text-red-700 mt-1">{error}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                Email address
+              </label>
+              <div className="mt-1">
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Password
+              </label>
+              <div className="mt-1">
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Signing in...' : 'Sign in'}
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">
+                  Hospital Staff Access Only
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ============================================================================
 // UTILITY COMPONENTS
@@ -40,6 +178,255 @@ const StatusBadge = ({ status }) => {
       <Icon className="w-3 h-3" />
       {status ? status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ') : 'Scheduled'}
     </span>
+  );
+};
+
+// ============================================================================
+// PATIENT AUTOCOMPLETE COMPONENT
+// ============================================================================
+
+const PatientAutocomplete = ({ 
+  patients, 
+  selectedPatient, 
+  onPatientSelect, 
+  onNewPatient,
+  searchTerm,
+  onSearchChange 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const filteredPatients = patients.filter(patient =>
+    patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    patient.phone.includes(searchTerm)
+  );
+
+  const handlePatientSelect = (patient) => {
+    onPatientSelect(patient);
+    setIsOpen(false);
+    onSearchChange(patient.name);
+  };
+
+  const handleInputChange = (value) => {
+    onSearchChange(value);
+    if (value.length > 0) {
+      setIsOpen(true);
+    } else {
+      setIsOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => handleInputChange(e.target.value)}
+          onFocus={() => searchTerm.length > 0 && setIsOpen(true)}
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          placeholder="Type patient name or phone..."
+        />
+        <User className="w-4 h-4 absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredPatients.length > 0 ? (
+            <>
+              {filteredPatients.map(patient => (
+                <button
+                  key={patient.id}
+                  type="button"
+                  onClick={() => handlePatientSelect(patient)}
+                  className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                >
+                  <div className="font-medium text-gray-900">{patient.name}</div>
+                  <div className="text-sm text-gray-600">{patient.phone}</div>
+                </button>
+              ))}
+            </>
+          ) : searchTerm.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onNewPatient(searchTerm)}
+              className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-2 text-blue-600"
+            >
+              <UserPlus className="w-4 h-4" />
+              Create new patient: "{searchTerm}"
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================================================
+// PATIENT HISTORY MODAL
+// ============================================================================
+
+const PatientHistoryModal = ({ patient, appointments, onClose }) => {
+  const patientAppointments = appointments.filter(apt => 
+    apt.patient_id === patient.id
+  ).sort((a, b) => new Date(b.appointmentDate) - new Date(a.appointmentDate));
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg">
+              <History className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-800">Patient History</h2>
+              <p className="text-gray-600 text-sm">{patient.name} - {patient.phone}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {patientAppointments.length > 0 ? (
+            <div className="space-y-4">
+              {patientAppointments.map(appointment => (
+                <div key={appointment.id} className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <StatusBadge status={appointment.status} />
+                      <span className="font-medium text-gray-900">
+                        {appointment.appointmentDate} at {appointment.appointmentTime}
+                      </span>
+                    </div>
+                    <span className="text-sm text-gray-600">
+                      {new Date(appointment.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-700">Doctor:</span>
+                      <p className="text-gray-900">{appointment.doctor || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Department:</span>
+                      <p className="text-gray-900">{appointment.department || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Reason:</span>
+                      <p className="text-gray-900">{appointment.reason || 'Not specified'}</p>
+                    </div>
+                  </div>
+                  
+                  {appointment.specialInstructions && (
+                    <div className="mt-2">
+                      <span className="font-medium text-gray-700 text-sm">Instructions:</span>
+                      <p className="text-gray-900 text-sm">{appointment.specialInstructions}</p>
+                    </div>
+                  )}
+                  
+                  {appointment.patientResponse && (
+                    <div className="mt-2">
+                      <span className="font-medium text-gray-700 text-sm">Patient Response:</span>
+                      <p className="text-gray-900 text-sm">{appointment.patientResponse}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <History className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Appointment History</h3>
+              <p className="text-gray-600">This patient has no previous appointments.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 p-6 border-t border-gray-200">
+          <button
+            onClick={onClose}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200"
+          >
+            Close History
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// TOOLS DROPDOWN COMPONENT
+// ============================================================================
+
+const ToolsDropdown = ({ 
+  setShowStatistics, 
+  setShowCalendar, 
+  exportToCSV, 
+  importFromCSV, 
+  setShowCSVInstructions 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
+      >
+        <span>Tools</span>
+        <ChevronDown className="w-4 h-4" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+          <button
+            onClick={() => { setShowStatistics(true); setIsOpen(false); }}
+            className="flex items-center gap-3 w-full px-4 py-2 text-gray-700 hover:bg-gray-100 transition duration-200"
+          >
+            <BarChart3 className="w-4 h-4" />
+            Statistics
+          </button>
+          <button
+            onClick={() => { setShowCalendar(true); setIsOpen(false); }}
+            className="flex items-center gap-3 w-full px-4 py-2 text-gray-700 hover:bg-gray-100 transition duration-200"
+          >
+            <Calendar className="w-4 h-4" />
+            Calendar View
+          </button>
+          <button
+            onClick={() => { exportToCSV(); setIsOpen(false); }}
+            className="flex items-center gap-3 w-full px-4 py-2 text-gray-700 hover:bg-gray-100 transition duration-200"
+          >
+            <FileUp className="w-4 h-4" />
+            Export CSV
+          </button>
+          <label className="flex items-center gap-3 w-full px-4 py-2 text-gray-700 hover:bg-gray-100 transition duration-200 cursor-pointer">
+            <FileDown className="w-4 h-4" />
+            Import CSV
+            <input
+              type="file"
+              accept=".csv"
+              onChange={(e) => { importFromCSV(e); setIsOpen(false); }}
+              className="hidden"
+            />
+          </label>
+          <button
+            onClick={() => { setShowCSVInstructions(true); setIsOpen(false); }}
+            className="flex items-center gap-3 w-full px-4 py-2 text-gray-700 hover:bg-gray-100 transition duration-200"
+          >
+            <Info className="w-4 h-4" />
+            CSV Instructions
+          </button>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -127,65 +514,73 @@ const StatisticsModal = ({ appointments, setShowStatistics }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-gray-600 font-medium">Confirmation Rate</p>
-                <TrendingUp className="w-4 h-4 text-green-600" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Status Distribution</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Scheduled</span>
+                  <span className="font-medium text-gray-900">{stats.scheduled}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Confirmed</span>
+                  <span className="font-medium text-gray-900">{stats.confirmed}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Completed</span>
+                  <span className="font-medium text-gray-900">{stats.completed}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Cancelled</span>
+                  <span className="font-medium text-gray-900">{stats.cancelled}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">No Show</span>
+                  <span className="font-medium text-gray-900">{stats.noShow}</span>
+                </div>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.confirmationRate}%</p>
             </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-gray-600 font-medium">Completion Rate</p>
-                <Activity className="w-4 h-4 text-blue-600" />
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.completionRate}%</p>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-gray-600 font-medium">No-Show Rate</p>
-                <AlertCircle className="w-4 h-4 text-orange-600" />
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.noShowRate}%</p>
-            </div>
-          </div>
 
-          <div>
-            <h3 className="font-semibold text-gray-800 mb-3">Appointments by Department</h3>
-            <div className="space-y-2">
-              {Object.entries(stats.deptCounts).length > 0 ? (
-                Object.entries(stats.deptCounts)
-                  .sort(([,a], [,b]) => b - a)
-                  .slice(0, 5)
-                  .map(([dept, count]) => (
-                    <div key={dept} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <span className="text-sm font-medium text-gray-700">{dept}</span>
-                      <span className="text-sm font-bold text-gray-900">{count}</span>
-                    </div>
-                  ))
-              ) : (
-                <p className="text-sm text-gray-500 text-center py-4">No department data available</p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <h3 className="font-semibold text-gray-800 mb-3">Appointments by Doctor</h3>
-            <div className="space-y-2">
-              {Object.entries(stats.doctorCounts).length > 0 ? (
-                Object.entries(stats.doctorCounts)
-                  .sort(([,a], [,b]) => b - a)
-                  .slice(0, 5)
-                  .map(([doctor, count]) => (
-                    <div key={doctor} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <span className="text-sm font-medium text-gray-700">{doctor}</span>
-                      <span className="text-sm font-bold text-gray-900">{count}</span>
-                    </div>
-                  ))
-              ) : (
-                <p className="text-sm text-gray-500 text-center py-4">No doctor data available</p>
-              )}
+            <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Metrics</h3>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm text-gray-600">Completion Rate</span>
+                    <span className="text-sm font-medium text-gray-900">{stats.completionRate}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-green-600 h-2 rounded-full" 
+                      style={{ width: `${stats.completionRate}%` }}
+                    ></div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm text-gray-600">Confirmation Rate</span>
+                    <span className="text-sm font-medium text-gray-900">{stats.confirmationRate}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full" 
+                      style={{ width: `${stats.confirmationRate}%` }}
+                    ></div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm text-gray-600">No-Show Rate</span>
+                    <span className="text-sm font-medium text-gray-900">{stats.noShowRate}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-orange-600 h-2 rounded-full" 
+                      style={{ width: `${stats.noShowRate}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -203,95 +598,173 @@ const StatisticsModal = ({ appointments, setShowStatistics }) => {
 
 const CalendarView = ({ appointments, setView, setEditingAppointment, setCurrentAppointment, setShowCalendar }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  
-  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-  
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-    'July', 'August', 'September', 'October', 'November', 'December'];
-  
-  const days = [];
-  
-  for (let i = 0; i < firstDayOfMonth; i++) {
-    days.push(<div key={`empty-${i}`} className="p-2 h-24"></div>);
-  }
-  
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const dayAppointments = appointments.filter(apt => apt.appointmentDate === dateStr);
-    
-    const isToday = new Date().toDateString() === new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toDateString();
-    
-    days.push(
-      <div 
-        key={day} 
-        className={`p-2 border border-gray-200 h-24 overflow-y-auto ${isToday ? 'bg-blue-50 border-blue-300' : 'bg-white'}`}
-      >
-        <div className={`text-sm font-semibold mb-1 ${isToday ? 'text-blue-600' : 'text-gray-700'}`}>
-          {day}
-        </div>
-        {dayAppointments.map(apt => (
-          <div 
-            key={apt.id}
-            onClick={() => {
-              setEditingAppointment(apt);
-              setCurrentAppointment(apt);
-              setView('add-appointment');
-              setShowCalendar(false);
-            }}
-            className="text-xs bg-blue-100 text-blue-800 p-1 mb-1 rounded cursor-pointer hover:bg-blue-200"
-          >
-            {apt.appointmentTime} - {apt.patientName}
-          </div>
-        ))}
-      </div>
-    );
-  }
-  
-  const previousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
+  const [selectedDate, setSelectedDate] = useState(null);
+
+  const navigateMonth = (direction) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(currentDate.getMonth() + direction);
+    setCurrentDate(newDate);
   };
-  
-  const nextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
+
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    
+    const days = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(new Date(year, month, i));
+    }
+    
+    return days;
   };
-  
+
+  const getAppointmentsForDate = (date) => {
+    const dateString = date.toISOString().split('T')[0];
+    return appointments.filter(apt => apt.appointmentDate === dateString);
+  };
+
+  const days = getDaysInMonth(currentDate);
+  const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">
-            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </h2>
-          <div className="flex gap-2">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg">
+              <Calendar className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-800">Calendar View</h2>
+              <p className="text-gray-600 text-sm">Browse appointments by date</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowCalendar(false)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
             <button
-              onClick={previousMonth}
+              onClick={() => navigateMonth(-1)}
               className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5 text-gray-600" />
             </button>
+            <h3 className="text-xl font-semibold text-gray-900">{monthName}</h3>
             <button
-              onClick={nextMonth}
+              onClick={() => navigateMonth(1)}
               className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
             >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setShowCalendar(false)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
-            >
-              <X className="w-5 h-5" />
+              <ChevronRight className="w-5 h-5 text-gray-600" />
             </button>
           </div>
-        </div>
-        
-        <div className="grid grid-cols-7 gap-1">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="p-2 text-center font-semibold text-gray-600 text-sm">
-              {day}
+
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1">
+            {days.map(day => {
+              const dayAppointments = getAppointmentsForDate(day);
+              const isToday = day.toDateString() === new Date().toDateString();
+              const isSelected = selectedDate && day.toDateString() === selectedDate.toDateString();
+              
+              return (
+                <button
+                  key={day.toISOString()}
+                  onClick={() => setSelectedDate(day)}
+                  className={`min-h-24 p-2 border rounded-lg text-left transition duration-200 ${
+                    isToday ? 'bg-blue-50 border-blue-200' : 
+                    isSelected ? 'bg-gray-100 border-gray-300' : 
+                    'bg-white border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className={`text-sm font-medium ${
+                    isToday ? 'text-blue-600' : 'text-gray-900'
+                  }`}>
+                    {day.getDate()}
+                  </div>
+                  <div className="mt-1 space-y-1">
+                    {dayAppointments.slice(0, 2).map(apt => {
+                      const patientName = apt.patients?.name || apt.patientName;
+                      return (
+                        <div
+                          key={apt.id}
+                          className={`text-xs p-1 rounded truncate ${
+                            apt.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                            apt.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                            apt.status === 'completed' ? 'bg-gray-100 text-gray-800' :
+                            'bg-blue-100 text-blue-800'
+                          }`}
+                          title={`${patientName} - ${apt.appointmentTime}`}
+                        >
+                          {apt.appointmentTime} - {patientName.split(' ')[0]}
+                        </div>
+                      );
+                    })}
+                    {dayAppointments.length > 2 && (
+                      <div className="text-xs text-gray-500">
+                        +{dayAppointments.length - 2} more
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedDate && (
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-semibold text-gray-900 mb-3">
+                Appointments for {selectedDate.toLocaleDateString()}
+              </h4>
+              <div className="space-y-2">
+                {getAppointmentsForDate(selectedDate).map(apt => {
+                  const patientName = apt.patients?.name || apt.patientName;
+                  const patientPhone = apt.patients?.phone || apt.patientPhone;
+                  
+                  return (
+                    <div key={apt.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                      <div>
+                        <div className="font-medium text-gray-900">{patientName}</div>
+                        <div className="text-sm text-gray-600">{apt.appointmentTime} • {apt.doctor}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={apt.status} />
+                        <button
+                          onClick={() => {
+                            setCurrentAppointment(apt);
+                            setEditingAppointment(apt);
+                            setShowCalendar(false);
+                            setView('add-appointment');
+                          }}
+                          className="p-1 text-blue-600 hover:text-blue-800"
+                          title="Edit"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {getAppointmentsForDate(selectedDate).length === 0 && (
+                  <p className="text-gray-500 text-center py-4">No appointments for this date</p>
+                )}
+              </div>
             </div>
-          ))}
-          {days}
+          )}
         </div>
       </div>
     </div>
@@ -299,18 +772,27 @@ const CalendarView = ({ appointments, setView, setEditingAppointment, setCurrent
 };
 
 const StatusUpdateModal = ({ appointment, setShowStatusModal, handleStatusUpdate }) => {
-  const [status, setStatus] = useState(appointment.status || 'scheduled');
+  const [status, setStatus] = useState(appointment.status);
   const [response, setResponse] = useState(appointment.patientResponse || '');
-  
-  const statuses = ['scheduled', 'confirmed', 'cancelled', 'completed', 'no-show'];
-  
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    handleStatusUpdate(appointment.id, status, response);
+    setShowStatusModal(false);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div>
-            <h2 className="text-xl font-bold text-gray-800">Update Status</h2>
-            <p className="text-gray-600 text-sm">{appointment.patientName}</p>
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg">
+              <Check className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-800">Update Status</h2>
+              <p className="text-gray-600 text-sm">Update appointment status and patient response</p>
+            </div>
           </div>
           <button
             onClick={() => setShowStatusModal(false)}
@@ -320,156 +802,76 @@ const StatusUpdateModal = ({ appointment, setShowStatusModal, handleStatusUpdate
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Appointment Status
+              Status
             </label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             >
-              {statuses.map(s => (
-                <option key={s} value={s}>
-                  {s.charAt(0).toUpperCase() + s.slice(1).replace('-', ' ')}
-                </option>
-              ))}
+              <option value="scheduled">Scheduled</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="completed">Completed</option>
+              <option value="no-show">No Show</option>
             </select>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notes / Patient Response
+              Patient Response
             </label>
             <textarea
               value={response}
               onChange={(e) => setResponse(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               rows="3"
-              placeholder="Add any notes or patient feedback..."
+              placeholder="Patient feedback or response..."
             />
           </div>
 
           <div className="flex gap-3 pt-4">
             <button
+              type="button"
               onClick={() => setShowStatusModal(false)}
               className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
             >
               Cancel
             </button>
             <button
-              onClick={() => {
-                handleStatusUpdate(appointment.id, status, response);
-                setShowStatusModal(false);
-              }}
+              type="submit"
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200"
             >
               Update Status
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
 };
 
 const SettingsModal = ({ tempSettings, setTempSettings, hospitalInfo, setHospitalInfo, setShowSettings }) => {
-  const [uploading, setUploading] = useState(false);
-
-  const handleLogoUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file');
-      return;
-    }
-    
-    if (file.size > 2 * 1024 * 1024) {
-      alert('File size must be less than 2MB');
-      return;
-    }
-    
-    setUploading(true);
-    
+  const handleSave = async () => {
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `logos/${fileName}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('hospital-assets')
-        .upload(filePath, file, { upsert: true });
-        
-      if (uploadError) {
-        throw uploadError;
-      }
-      
-      const { data } = supabase.storage
-        .from('hospital-assets')
-        .getPublicUrl(filePath);
-        
-      setTempSettings({ ...tempSettings, logo: data.publicUrl });
-      alert('Logo uploaded successfully!');
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('Error uploading logo. Make sure the "hospital-assets" bucket exists in Supabase Storage and is set to public.');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleSaveSettings = async () => {
-    try {
-      const { data: existingData, error: fetchError } = await supabase
+      const { error } = await supabase
         .from('hospital_info')
-        .select('*')
-        .eq('id', 'info')
-        .single();
+        .upsert({ 
+          id: 'info',
+          ...tempSettings,
+          updated_at: new Date()
+        });
 
-      let saveError = null;
+      if (error) throw error;
       
-      if (fetchError && fetchError.code === 'PGRST116') {
-        const { error: insertError } = await supabase
-          .from('hospital_info')
-          .insert([{ 
-            id: 'info', 
-            name: tempSettings.name,
-            address: tempSettings.address,
-            phone: tempSettings.phone,
-            logo: tempSettings.logo,
-            primaryColor: tempSettings.primaryColor
-          }]);
-        
-        saveError = insertError;
-      } else if (!fetchError) {
-        const { error: updateError } = await supabase
-          .from('hospital_info')
-          .update({
-            name: tempSettings.name,
-            address: tempSettings.address,
-            phone: tempSettings.phone,
-            logo: tempSettings.logo,
-            primaryColor: tempSettings.primaryColor
-          })
-          .eq('id', 'info');
-        
-        saveError = updateError;
-      } else {
-        saveError = fetchError;
-      }
-
-      if (saveError) {
-        console.error('Save error:', saveError);
-        alert('Error saving settings: ' + saveError.message);
-      } else {
-        setHospitalInfo({...tempSettings});
-        setShowSettings(false);
-        alert('Settings saved successfully!');
-      }
+      setHospitalInfo(tempSettings);
+      setShowSettings(false);
+      alert('Settings saved successfully!');
     } catch (error) {
-      console.error('Settings save error:', error);
+      console.error('Error saving settings:', error);
       alert('Error saving settings: ' + error.message);
     }
   };
@@ -488,10 +890,7 @@ const SettingsModal = ({ tempSettings, setTempSettings, hospitalInfo, setHospita
             </div>
           </div>
           <button
-            onClick={() => {
-              setShowSettings(false);
-              setTempSettings({...hospitalInfo});
-            }}
+            onClick={() => setShowSettings(false)}
             className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
           >
             <X className="w-5 h-5 text-gray-500" />
@@ -499,116 +898,80 @@ const SettingsModal = ({ tempSettings, setTempSettings, hospitalInfo, setHospita
         </div>
 
         <div className="p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Hospital Logo
-            </label>
-            {tempSettings.logo && (
-              <div className="mb-4 flex items-center gap-4">
-                <img 
-                  src={tempSettings.logo} 
-                  alt="Hospital Logo" 
-                  className="w-24 h-24 object-contain border border-gray-200 rounded-lg p-2"
-                />
-                <button
-                  onClick={() => setTempSettings({ ...tempSettings, logo: '' })}
-                  className="text-sm text-red-600 hover:text-red-800"
-                >
-                  Remove Logo
-                </button>
-              </div>
-            )}
-            <label className="flex items-center gap-2 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition">
-              <Image className="w-5 h-5 text-gray-600" />
-              <span className="text-sm text-gray-700">
-                {uploading ? 'Uploading...' : 'Choose Logo Image'}
-              </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Hospital Name
+              </label>
               <input
-                type="file"
-                accept="image/*"
-                onChange={handleLogoUpload}
-                disabled={uploading}
-                className="hidden"
+                type="text"
+                value={tempSettings.name}
+                onChange={(e) => setTempSettings({...tempSettings, name: e.target.value})}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               />
-            </label>
-            <p className="text-xs text-gray-500 mt-1">Max 2MB. Supported: JPG, PNG, SVG</p>
-          </div>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Hospital Name
-            </label>
-            <input
-              type="text"
-              value={tempSettings.name}
-              onChange={(e) => setTempSettings({ ...tempSettings, name: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              placeholder="Enter hospital name"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Phone Number
+              </label>
+              <input
+                type="text"
+                value={tempSettings.phone}
+                onChange={(e) => setTempSettings({...tempSettings, phone: e.target.value})}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Hospital Address
-            </label>
-            <textarea
-              value={tempSettings.address}
-              onChange={(e) => setTempSettings({ ...tempSettings, address: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              rows="2"
-              placeholder="Enter full address"
-            />
-          </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Address
+              </label>
+              <textarea
+                value={tempSettings.address}
+                onChange={(e) => setTempSettings({...tempSettings, address: e.target.value})}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                rows="3"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Contact Phone Number
-            </label>
-            <input
-              type="tel"
-              value={tempSettings.phone}
-              onChange={(e) => setTempSettings({ ...tempSettings, phone: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              placeholder="+234 XXX XXX XXXX"
-            />
-          </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Logo URL
+              </label>
+              <input
+                type="url"
+                value={tempSettings.logo}
+                onChange={(e) => setTempSettings({...tempSettings, logo: e.target.value})}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="https://example.com/logo.png"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Primary Brand Color
-            </label>
-            <div className="flex gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Primary Color
+              </label>
               <input
                 type="color"
                 value={tempSettings.primaryColor}
-                onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
-                className="w-20 h-12 border border-gray-300 rounded-lg cursor-pointer"
-              />
-              <input
-                type="text"
-                value={tempSettings.primaryColor}
-                onChange={(e) => setTempSettings({ ...tempSettings, primaryColor: e.target.value })}
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                placeholder="#2563eb"
+                onChange={(e) => setTempSettings({...tempSettings, primaryColor: e.target.value})}
+                className="w-full h-12 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               />
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-6">
             <button
-              onClick={() => {
-                setShowSettings(false);
-                setTempSettings({...hospitalInfo});
-              }}
+              onClick={() => setShowSettings(false)}
               className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
             >
               Cancel
             </button>
             <button
-              onClick={handleSaveSettings}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+              onClick={handleSave}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200"
             >
-              <Save className="w-5 h-5" />
               Save Settings
             </button>
           </div>
@@ -618,124 +981,136 @@ const SettingsModal = ({ tempSettings, setTempSettings, hospitalInfo, setHospita
   );
 };
 
-const CSVInstructionsModal = ({ setShowCSVInstructions }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-      <div className="flex items-center justify-between p-6 border-b border-gray-200">
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg">
-            <Info className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-800">CSV Import Instructions</h2>
-            <p className="text-gray-600 text-sm">Required format for importing appointments</p>
-          </div>
-        </div>
-        <button
-          onClick={() => setShowCSVInstructions(false)}
-          className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
-        >
-          <X className="w-5 h-5 text-gray-500" />
-        </button>
-      </div>
-
-      <div className="p-6 space-y-6">
-        <div>
-          <h3 className="font-semibold text-gray-800 mb-3">CSV Format Requirements:</h3>
-          <div className="bg-gray-50 rounded-lg p-4 overflow-x-auto">
-            <code className="text-sm block whitespace-pre">
-{`PatientName,PatientPhone,AppointmentDate,AppointmentTime,Doctor,Department,Reason,SpecialInstructions
-John Doe,+2348012345678,2024-01-15,09:00,Dr. Smith,Pediatrics,Vaccination,"Bring vaccination card"
-Jane Smith,+2348023456789,2024-01-15,10:00,Dr. Johnson,General,Check-up,"Come fasting"`}
-            </code>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="bg-blue-100 p-1 rounded mt-1">
-              <Info className="w-4 h-4 text-blue-600" />
+const CSVInstructionsModal = ({ setShowCSVInstructions }) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg">
+              <Info className="w-5 h-5 text-white" />
             </div>
-            <p className="font-medium text-gray-800">File must have these exact column headers (case-sensitive)</p>
-          </div>
-          
-          <div className="flex items-start gap-3">
-            <div className="bg-blue-100 p-1 rounded mt-1">
-              <Info className="w-4 h-4 text-blue-600" />
-            </div>
-            <p className="font-medium text-gray-800">Date format: YYYY-MM-DD (e.g., 2024-01-15)</p>
-          </div>
-          
-          <div className="flex items-start gap-3">
-            <div className="bg-blue-100 p-1 rounded mt-1">
-              <Info className="w-4 h-4 text-blue-600" />
-            </div>
-            <p className="font-medium text-gray-800">Time format: HH:MM (24-hour format, e.g., 14:30)</p>
-          </div>
-          
-          <div className="flex items-start gap-3">
-            <div className="bg-blue-100 p-1 rounded mt-1">
-              <Info className="w-4 h-4 text-blue-600" />
-            </div>
-            <p className="font-medium text-gray-800">Phone numbers should include country code (e.g., +234...)</p>
-          </div>
-        </div>
-
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
             <div>
-              <h4 className="font-semibold text-yellow-800">Important Notes</h4>
-              <ul className="text-sm text-yellow-700 mt-2 space-y-1">
-                <li>• All columns are required except SpecialInstructions</li>
-                <li>• File must be saved as CSV (Comma Separated Values)</li>
-                <li>• Avoid special characters in column headers</li>
-                <li>• Maximum file size: 5MB</li>
-              </ul>
+              <h2 className="text-xl font-bold text-gray-800">CSV Import Instructions</h2>
+              <p className="text-gray-600 text-sm">How to format your CSV file for import</p>
             </div>
           </div>
+          <button
+            onClick={() => setShowCSVInstructions(false)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
         </div>
 
-        <button
-          onClick={() => setShowCSVInstructions(false)}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200"
-        >
-          Got it, thanks!
-        </button>
+        <div className="p-6 space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Required Columns</h3>
+            <div className="bg-gray-50 rounded-lg p-4">
+              <code className="text-sm text-gray-700">
+                PatientName, PatientPhone, AppointmentDate, AppointmentTime
+              </code>
+            </div>
+            <p className="text-sm text-gray-600 mt-2">
+              These four columns are mandatory. Other columns are optional.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Optional Columns</h3>
+            <div className="bg-gray-50 rounded-lg p-4">
+              <code className="text-sm text-gray-700">
+                Doctor, Department, Reason, SpecialInstructions, Status, PatientResponse
+              </code>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Date and Time Format</h3>
+            <div className="space-y-2 text-sm text-gray-700">
+              <p><strong>AppointmentDate:</strong> YYYY-MM-DD (e.g., 2024-12-25)</p>
+              <p><strong>AppointmentTime:</strong> HH:MM (24-hour format, e.g., 14:30)</p>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Example CSV</h3>
+            <div className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto">
+              <pre className="text-sm">
+{`PatientName,PatientPhone,AppointmentDate,AppointmentTime,Doctor,Department,Reason
+John Doe,+2348012345678,2024-12-25,14:30,Dr. Smith,Cardiology,Regular check-up
+Jane Smith,+2348098765432,2024-12-26,10:00,Dr. Johnson,Pediatrics,Vaccination`}
+              </pre>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowCSVInstructions(false)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200"
+          >
+            Close Instructions
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
-// ============================================================================
-// WHATSAPP BULK MESSAGING COMPONENTS
-// ============================================================================
+const WhatsAppBulkModal = ({ selectedAppointments, appointments, hospitalInfo, setShowBulkWhatsApp, bulkProgress, setBulkProgress }) => {
+  const selectedAppointmentsList = appointments.filter(apt => selectedAppointments.has(apt.id));
 
-const WhatsAppBulkModal = ({ 
-  selectedAppointments, 
-  appointments, 
-  hospitalInfo, 
-  setShowBulkWhatsApp,
-  bulkProgress,
-  setBulkProgress 
-}) => {
-  const [delay, setDelay] = useState(15000);
+  const generateBulkWhatsApp = () => {
+    const links = selectedAppointmentsList.map(appointment => {
+      const shareText = generateMessageText(appointment);
+      const patientPhone = appointment.patients?.phone || appointment.patientPhone;
+      const phoneNumber = normalizePhoneNumber(patientPhone);
+      return `https://wa.me/${phoneNumber}?text=${encodeURIComponent(shareText)}`;
+    });
 
-  // Normalize phone number to WhatsApp format
-  const normalizePhoneNumber = (phone) => {
-    let digits = phone.replace(/\D/g, '');
-    
-    if (digits.startsWith('0') && digits.length === 11) {
-      digits = '234' + digits.substring(1);
-    } else if (digits.startsWith('2340') && digits.length === 14) {
-      digits = '234' + digits.substring(4);
-    }
-    
-    return digits;
+    // Create a simple HTML page with all the links
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bulk WhatsApp Messages</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .link { margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 5px; }
+        a { color: #25D366; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Bulk WhatsApp Messages - ${hospitalInfo.name}</h1>
+    <p>Click each link to open WhatsApp with pre-filled message:</p>
+    ${links.map((link, index) => {
+      const apt = selectedAppointmentsList[index];
+      const patientName = apt.patients?.name || apt.patientName;
+      return `
+        <div class="link">
+            <strong>${patientName}</strong> - ${apt.appointmentDate} at ${apt.appointmentTime}<br>
+            <a href="${link}" target="_blank">Open WhatsApp for ${patientName}</a>
+        </div>
+      `;
+    }).join('')}
+</body>
+</html>`;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `whatsapp-bulk-${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
-  // Generate personalized message text
   const generateMessageText = (appointment) => {
+    const patientName = appointment.patients?.name || appointment.patientName;
+    const patientPhone = appointment.patients?.phone || appointment.patientPhone;
+    
     const formattedDate = new Date(appointment.appointmentDate).toLocaleDateString('en-GB', {
       weekday: 'long',
       year: 'numeric',
@@ -756,7 +1131,7 @@ const WhatsAppBulkModal = ({
       : '';
 
     return `
-Dear ${appointment.patientName},
+Dear ${patientName},
 
 You have been scheduled for an appointment at *${hospitalInfo.name}*.
 
@@ -783,189 +1158,17 @@ ${hospitalInfo.name} Team
     `.trim();
   };
 
-  // Generate WhatsApp auto-opener HTML
-  const generateWhatsAppAutoOpener = () => {
-    const selectedApts = appointments.filter(apt => selectedAppointments.has(apt.id));
+  const normalizePhoneNumber = (phone) => {
+    let digits = phone.replace(/\D/g, '');
     
-    if (selectedApts.length === 0) {
-      alert('No appointments selected');
-      return;
+    if (digits.startsWith('0') && digits.length === 11) {
+      digits = '234' + digits.substring(1);
+    } else if (digits.startsWith('2340') && digits.length === 14) {
+      digits = '234' + digits.substring(4);
     }
-
-    // Generate array of WhatsApp URLs with personalized messages
-    const waLinks = selectedApts.map(appointment => {
-      const shareText = generateMessageText(appointment);
-      const phoneNumber = normalizePhoneNumber(appointment.patientPhone);
-      return { 
-        url: `https://wa.me/${phoneNumber}?text=${encodeURIComponent(shareText)}`, 
-        patientName: appointment.patientName 
-      };
-    });
-
-    // FIXED: Properly escaped template literals for the HTML content
-    const htmlContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WhatsApp Auto-Opener - ${hospitalInfo.name}</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; background: #f0f0f0; max-width: 800px; margin: 0 auto; }
-    h1 { color: #2563eb; }
-    .instructions { background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffeaa7; }
-    #controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
-    button { padding: 10px 20px; background: #25D366; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-    button:hover { background: #128C7E; }
-    button:disabled { background: #ccc; cursor: not-allowed; }
-    #progress { font-weight: bold; margin-bottom: 20px; color: #d35400; }
-    #log { background: white; padding: 15px; border: 1px solid #ddd; border-radius: 8px; height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
-    .error { color: red; }
-  </style>
-</head>
-<body>
-  <h1>WhatsApp Auto-Opener for ${selectedApts.length} Appointments</h1>
-  <div class="instructions">
-    <p><strong>IMPORTANT NOTES:</strong></p>
-    <ul>
-      <li><strong>Login First:</strong> Open <a href="https://web.whatsapp.com" target="_blank">web.whatsapp.com</a> in another tab and scan the QR code with your WhatsApp app. Refresh if not connected.</li>
-      <li><strong>No Auto-Send:</strong> This only OPENS pre-filled chats. You MUST manually click "Send" in each tab—WhatsApp blocks automation.</li>
-      <li><strong>Delay:</strong> Use 10000-30000ms to avoid bans. Start small!</li>
-      <li><strong>Troubleshooting:</strong> If tabs don't open: Disable popup blocker (browser settings). Check console (F12) for errors.</li>
-      <li><strong>Progress:</strong> Watch the log below. Each open is logged with patient name.</li>
-    </ul>
-  </div>
-  
-  <div id="controls">
-    <button id="checkConnection">Check WhatsApp Connection</button>
-    <button id="startBtn">Start Opening Tabs</button>
-    <button id="pauseBtn" disabled>Pause</button>
-    <button id="resumeBtn" disabled>Resume</button>
-    <label>Delay (ms): <input type="number" id="delayInput" value="${delay}" min="5000" step="1000"></label>
-  </div>
-  
-  <div id="progress">Progress: 0 / ${selectedApts.length}</div>
-  <div id="log">Ready. Click 'Check WhatsApp Connection' first!\\n</div>
-
-  <script>
-    const links = ${JSON.stringify(waLinks)};
-    let currentIndex = 0;
-    let intervalId = null;
-    let isPaused = false;
-
-    const startBtn = document.getElementById('startBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
-    const resumeBtn = document.getElementById('resumeBtn');
-    const delayInput = document.getElementById('delayInput');
-    const progress = document.getElementById('progress');
-    const log = document.getElementById('log');
-    const checkConnection = document.getElementById('checkConnection');
-
-    function updateProgress() {
-      progress.textContent = 'Progress: ' + currentIndex + ' / ' + links.length + ' tabs opened';
-    }
-
-    function appendLog(message, isError = false) {
-      const timestamp = new Date().toLocaleTimeString();
-      log.textContent += timestamp + ' - ' + message + (isError ? ' (ERROR)' : '') + '\\n';
-      log.scrollTop = log.scrollHeight;
-    }
-
-    function sendNext() {
-      if (currentIndex >= links.length || isPaused) return;
-
-      const item = links[currentIndex];
-      const win = window.open(item.url, '_blank');
-      if (win) {
-        appendLog('Opened tab for ' + (item.patientName || 'Patient ' + (currentIndex + 1)));
-      } else {
-        appendLog('Failed to open tab - popup blocked?', true);
-      }
-      currentIndex++;
-      updateProgress();
-
-      if (currentIndex >= links.length) {
-        appendLog('All tabs opened! Now manually send in each.');
-        clearInterval(intervalId);
-        startBtn.disabled = false;
-        pauseBtn.disabled = true;
-        resumeBtn.disabled = true;
-      }
-    }
-
-    checkConnection.addEventListener('click', () => {
-      const testWin = window.open('https://web.whatsapp.com', '_blank');
-      if (testWin) {
-        appendLog('Test tab opened - check if WhatsApp Web is logged in there.');
-      } else {
-        appendLog('Popup blocked - allow popups in browser settings.', true);
-      }
-    });
-
-    startBtn.addEventListener('click', () => {
-      if (currentIndex >= links.length) {
-        currentIndex = 0;
-        updateProgress();
-        appendLog('Resetting...');
-      }
-      const delay = parseInt(delayInput.value) || 15000;
-      if (delay < 5000) {
-        appendLog('Delay too low - increased to 5000ms for safety.', true);
-        delayInput.value = 5000;
-      }
-      intervalId = setInterval(sendNext, delay);
-      appendLog('Started opening with ' + delay + 'ms delay. Manually send in tabs!');
-      startBtn.disabled = true;
-      pauseBtn.disabled = false;
-      resumeBtn.disabled = true;
-      isPaused = false;
-    });
-
-    pauseBtn.addEventListener('click', () => {
-      isPaused = true;
-      clearInterval(intervalId);
-      appendLog('Paused - resume or close tabs.');
-      startBtn.disabled = false;
-      pauseBtn.disabled = true;
-      resumeBtn.disabled = false;
-    });
-
-    resumeBtn.addEventListener('click', () => {
-      const delay = parseInt(delayInput.value) || 15000;
-      intervalId = setInterval(sendNext, delay);
-      appendLog('Resumed opening.');
-      startBtn.disabled = true;
-      pauseBtn.disabled = false;
-      resumeBtn.disabled = true;
-      isPaused = false;
-    });
-  </script>
-</body>
-</html>`;
-
-    // Download the HTML file
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `whatsapp-auto-opener-${new Date().toISOString().split('T')[0]}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-
-    setBulkProgress({ 
-      sent: selectedApts.length, 
-      total: selectedApts.length, 
-      status: 'Auto-opener generated! Download complete.' 
-    });
     
-    setTimeout(() => {
-      setBulkProgress({ sent: 0, total: 0, status: '' });
-      setShowBulkWhatsApp(false);
-    }, 3000);
+    return digits;
   };
-
-  const selectedCount = Array.from(selectedAppointments).length;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -977,7 +1180,7 @@ ${hospitalInfo.name} Team
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-800">Bulk WhatsApp Messages</h2>
-              <p className="text-gray-600 text-sm">Generate auto-opener for {selectedCount} appointments</p>
+              <p className="text-gray-600 text-sm">Generate WhatsApp messages for selected appointments</p>
             </div>
           </div>
           <button
@@ -989,41 +1192,41 @@ ${hospitalInfo.name} Team
         </div>
 
         <div className="p-6 space-y-6">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="font-semibold text-blue-800 mb-2">How it works:</h3>
-            <ul className="text-sm text-blue-700 space-y-1">
-              <li>• Generates an HTML file with all WhatsApp links</li>
-              <li>• Opens tabs automatically with delays to avoid bans</li>
-              <li>• You must manually click "Send" in each WhatsApp tab</li>
-              <li>• Requires WhatsApp Web to be logged in</li>
-            </ul>
-          </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Delay between tabs (milliseconds)
-            </label>
-            <input
-              type="number"
-              value={delay}
-              onChange={(e) => setDelay(parseInt(e.target.value) || 15000)}
-              min="5000"
-              step="1000"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              placeholder="15000"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Recommended: 15000ms (15 seconds). Lower values may trigger WhatsApp limits.
-            </p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">
+              {selectedAppointmentsList.length} Appointment{selectedAppointmentsList.length > 1 ? 's' : ''} Selected
+            </h3>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {selectedAppointmentsList.map(appointment => {
+                const patientName = appointment.patients?.name || appointment.patientName;
+                const patientPhone = appointment.patients?.phone || appointment.patientPhone;
+                
+                return (
+                  <div key={appointment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <div className="font-medium text-gray-900">{patientName}</div>
+                      <div className="text-sm text-gray-600">
+                        {appointment.appointmentDate} at {appointment.appointmentTime} • {appointment.doctor}
+                      </div>
+                    </div>
+                    <StatusBadge status={appointment.status} />
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          {bulkProgress.status && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-green-700 text-sm">{bulkProgress.status}</p>
+          <div className="bg-blue-50 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div className="text-sm text-blue-700">
+                <p className="font-medium">How it works:</p>
+                <p>This will generate an HTML file with individual WhatsApp links for each selected appointment. Open the file and click each link to send the message.</p>
+              </div>
             </div>
-          )}
+          </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3">
             <button
               onClick={() => setShowBulkWhatsApp(false)}
               className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
@@ -1031,90 +1234,15 @@ ${hospitalInfo.name} Team
               Cancel
             </button>
             <button
-              onClick={generateWhatsAppAutoOpener}
+              onClick={generateBulkWhatsApp}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
             >
               <Download className="w-5 h-5" />
-              Generate Auto-Opener
+              Generate WhatsApp Links
             </button>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
-
-// ============================================================================
-// TOOLS DROPDOWN COMPONENT
-// ============================================================================
-
-const ToolsDropdown = ({ 
-  setShowStatistics, 
-  setShowCalendar, 
-  exportToCSV, 
-  importFromCSV, 
-  setShowCSVInstructions 
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-200"
-      >
-        <span>Tools</span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-          <button
-            onClick={() => { setShowStatistics(true); setIsOpen(false); }}
-            className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition duration-200"
-          >
-            <BarChart3 className="w-4 h-4" />
-            Statistics
-          </button>
-          
-          <button
-            onClick={() => { setShowCalendar(true); setIsOpen(false); }}
-            className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition duration-200"
-          >
-            <Calendar className="w-4 h-4" />
-            Calendar View
-          </button>
-          
-          <div className="border-t border-gray-200 my-1"></div>
-          
-          <button
-            onClick={() => { exportToCSV(); setIsOpen(false); }}
-            className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition duration-200"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
-          
-          <label className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition duration-200 cursor-pointer">
-            <Upload className="w-4 h-4" />
-            Import CSV
-            <input
-              type="file"
-              accept=".csv"
-              onChange={(e) => { importFromCSV(e); setIsOpen(false); }}
-              className="hidden"
-            />
-          </label>
-          
-          <button
-            onClick={() => { setShowCSVInstructions(true); setIsOpen(false); }}
-            className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition duration-200"
-          >
-            <Info className="w-4 h-4" />
-            CSV Instructions
-          </button>
-        </div>
-      )}
     </div>
   );
 };
@@ -1125,13 +1253,22 @@ const ToolsDropdown = ({
 
 const HospitalAppointmentSystem = () => {
   // State management
+  const [user, setUser] = useState(null);
   const [view, setView] = useState('dashboard');
   const [appointments, setAppointments] = useState([]);
+  const [patients, setPatients] = useState([]);
   const [currentAppointment, setCurrentAppointment] = useState(null);
   const [editingAppointment, setEditingAppointment] = useState(null);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [showPatientHistory, setShowPatientHistory] = useState(false);
+  const [selectedPatientHistory, setSelectedPatientHistory] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('');
+  const [dateRangeFilter, setDateRangeFilter] = useState({
+    startDate: '',
+    endDate: ''
+  });
   const [showCalendar, setShowCalendar] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -1163,24 +1300,41 @@ const HospitalAppointmentSystem = () => {
     reason: '',
     specialInstructions: '',
     status: 'scheduled',
-    patientResponse: ''
+    patientResponse: '',
+    patient_id: null
   });
 
   // Initialize and fetch data
   useEffect(() => {
-    initializeApp();
+    checkAuth();
   }, []);
 
+  const checkAuth = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setUser(session.user);
+        await initializeApp();
+      }
+    } catch (error) {
+      console.error('Auth error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const initializeApp = async () => {
-    await Promise.all([fetchAppointments(), fetchHospitalInfo()]);
-    setLoading(false);
+    await Promise.all([fetchAppointments(), fetchPatients(), fetchHospitalInfo()]);
   };
 
   const fetchAppointments = async () => {
     try {
       const { data, error } = await supabase
         .from('appointments')
-        .select('*')
+        .select(`
+          *,
+          patients (name, phone)
+        `)
         .order('appointmentDate', { ascending: true })
         .order('appointmentTime', { ascending: true });
 
@@ -1188,6 +1342,20 @@ const HospitalAppointmentSystem = () => {
       setAppointments(data || []);
     } catch (error) {
       console.error('Error fetching appointments:', error);
+    }
+  };
+
+  const fetchPatients = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setPatients(data || []);
+    } catch (error) {
+      console.error('Error fetching patients:', error);
     }
   };
 
@@ -1210,6 +1378,60 @@ const HospitalAppointmentSystem = () => {
     }
   };
 
+  // Patient management
+  const createNewPatient = async (name, phone = '') => {
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .insert([{ 
+          name, 
+          phone: phone || 'Not provided',
+          created_at: new Date()
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      setPatients(prev => [...prev, data]);
+      setSelectedPatient(data);
+      setFormData(prev => ({
+        ...prev,
+        patientName: data.name,
+        patientPhone: data.phone,
+        patient_id: data.id
+      }));
+      
+      return data;
+    } catch (error) {
+      console.error('Error creating patient:', error);
+      alert('Error creating patient: ' + error.message);
+      return null;
+    }
+  };
+
+  const handlePatientSelect = (patient) => {
+    setSelectedPatient(patient);
+    setFormData(prev => ({
+      ...prev,
+      patientName: patient.name,
+      patientPhone: patient.phone,
+      patient_id: patient.id
+    }));
+  };
+
+  const handleNewPatient = async (name) => {
+    const patient = await createNewPatient(name);
+    if (patient) {
+      setPatientSearch(patient.name);
+    }
+  };
+
+  const viewPatientHistory = (patient) => {
+    setSelectedPatientHistory(patient);
+    setShowPatientHistory(true);
+  };
+
   // Form handlers
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -1230,8 +1452,11 @@ const HospitalAppointmentSystem = () => {
       reason: '',
       specialInstructions: '',
       status: 'scheduled',
-      patientResponse: ''
+      patientResponse: '',
+      patient_id: null
     });
+    setSelectedPatient(null);
+    setPatientSearch('');
     setEditingAppointment(null);
     setCurrentAppointment(null);
   };
@@ -1245,23 +1470,39 @@ const HospitalAppointmentSystem = () => {
     }
 
     try {
+      // If no patient_id, create a new patient first
+      let patientId = formData.patient_id;
+      if (!patientId) {
+        const newPatient = await createNewPatient(formData.patientName, formData.patientPhone);
+        if (!newPatient) return;
+        patientId = newPatient.id;
+      }
+
+      const appointmentData = {
+        ...formData,
+        patient_id: patientId
+      };
+
       if (editingAppointment) {
         const { error } = await supabase
           .from('appointments')
-          .update(formData)
+          .update(appointmentData)
           .eq('id', editingAppointment.id);
 
         if (error) throw error;
         
         setAppointments(prev => 
-          prev.map(apt => apt.id === editingAppointment.id ? { ...apt, ...formData } : apt)
+          prev.map(apt => apt.id === editingAppointment.id ? { ...apt, ...appointmentData } : apt)
         );
         alert('Appointment updated successfully!');
       } else {
         const { data, error } = await supabase
           .from('appointments')
-          .insert([{ ...formData, createdAt: new Date() }])
-          .select();
+          .insert([{ ...appointmentData, createdAt: new Date() }])
+          .select(`
+            *,
+            patients (name, phone)
+          `);
 
         if (error) throw error;
         
@@ -1325,8 +1566,8 @@ const HospitalAppointmentSystem = () => {
 
   const handleEditAppointment = (appointment) => {
     setFormData({
-      patientName: appointment.patientName || '',
-      patientPhone: appointment.patientPhone || '',
+      patientName: appointment.patients?.name || appointment.patientName || '',
+      patientPhone: appointment.patients?.phone || appointment.patientPhone || '',
       appointmentDate: appointment.appointmentDate || '',
       appointmentTime: appointment.appointmentTime || '',
       doctor: appointment.doctor || '',
@@ -1334,11 +1575,39 @@ const HospitalAppointmentSystem = () => {
       reason: appointment.reason || '',
       specialInstructions: appointment.specialInstructions || '',
       status: appointment.status || 'scheduled',
-      patientResponse: appointment.patientResponse || ''
+      patientResponse: appointment.patientResponse || '',
+      patient_id: appointment.patient_id || null
     });
+    
+    if (appointment.patient_id) {
+      const patient = patients.find(p => p.id === appointment.patient_id);
+      if (patient) {
+        setSelectedPatient(patient);
+        setPatientSearch(patient.name);
+      }
+    }
+    
     setEditingAppointment(appointment);
     setCurrentAppointment(appointment);
     setView('add-appointment');
+  };
+
+  // Authentication
+  const handleLogin = (user) => {
+    setUser(user);
+    initializeApp();
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setAppointments([]);
+      setPatients([]);
+      resetForm();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   // WhatsApp Functions
@@ -1355,6 +1624,9 @@ const HospitalAppointmentSystem = () => {
   };
 
   const generateMessageText = (appointment) => {
+    const patientName = appointment.patients?.name || appointment.patientName;
+    const patientPhone = appointment.patients?.phone || appointment.patientPhone;
+    
     const formattedDate = new Date(appointment.appointmentDate).toLocaleDateString('en-GB', {
       weekday: 'long',
       year: 'numeric',
@@ -1375,7 +1647,7 @@ const HospitalAppointmentSystem = () => {
       : '';
 
     return `
-Dear ${appointment.patientName},
+Dear ${patientName},
 
 You have been scheduled for an appointment at *${hospitalInfo.name}*.
 
@@ -1404,7 +1676,8 @@ ${hospitalInfo.name} Team
 
   const shareSingleAppointment = (appointment) => {
     const shareText = generateMessageText(appointment);
-    const phoneNumber = normalizePhoneNumber(appointment.patientPhone);
+    const patientPhone = appointment.patients?.phone || appointment.patientPhone;
+    const phoneNumber = normalizePhoneNumber(patientPhone);
     const windowName = `whatsapp_${appointment.id}_${Date.now()}`;
     const whatsappURL = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(shareText)}`;
     window.open(whatsappURL, windowName);
@@ -1435,12 +1708,19 @@ ${hospitalInfo.name} Team
     
     const csvContent = [
       headers.join(','),
-      ...appointments.map(apt => 
-        headers.map(header => {
-          const value = apt[header.toLowerCase()] || '';
+      ...appointments.map(apt => {
+        const patientName = apt.patients?.name || apt.patientName;
+        const patientPhone = apt.patients?.phone || apt.patientPhone;
+        
+        return headers.map(header => {
+          let value = '';
+          if (header === 'PatientName') value = patientName;
+          else if (header === 'PatientPhone') value = patientPhone;
+          else value = apt[header.toLowerCase()] || '';
+          
           return `"${value.toString().replace(/"/g, '""')}"`;
         }).join(',')
-      )
+      })
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -1510,7 +1790,10 @@ ${hospitalInfo.name} Team
         const { data, error } = await supabase
           .from('appointments')
           .insert(appointmentsToImport)
-          .select();
+          .select(`
+            *,
+            patients (name, phone)
+          `);
 
         if (error) throw error;
 
@@ -1528,19 +1811,38 @@ ${hospitalInfo.name} Team
     reader.readAsText(file);
   };
 
-  // Filter appointments
+  // Filter appointments with date range
   const filteredAppointments = useMemo(() => {
     return appointments.filter(apt => {
-      const matchesSearch = apt.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           apt.patientPhone?.includes(searchTerm) ||
+      const patientName = apt.patients?.name || apt.patientName;
+      const patientPhone = apt.patients?.phone || apt.patientPhone;
+      
+      const matchesSearch = patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           patientPhone?.includes(searchTerm) ||
                            apt.doctor?.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesStatus = statusFilter === 'all' || apt.status === statusFilter;
-      const matchesDate = !dateFilter || apt.appointmentDate === dateFilter;
       
-      return matchesSearch && matchesStatus && matchesDate;
+      // Date range filter logic
+      let matchesDateRange = true;
+      if (dateRangeFilter.startDate && dateRangeFilter.endDate) {
+        const appointmentDate = new Date(apt.appointmentDate);
+        const startDate = new Date(dateRangeFilter.startDate);
+        const endDate = new Date(dateRangeFilter.endDate);
+        matchesDateRange = appointmentDate >= startDate && appointmentDate <= endDate;
+      } else if (dateRangeFilter.startDate) {
+        const appointmentDate = new Date(apt.appointmentDate);
+        const startDate = new Date(dateRangeFilter.startDate);
+        matchesDateRange = appointmentDate >= startDate;
+      } else if (dateRangeFilter.endDate) {
+        const appointmentDate = new Date(apt.appointmentDate);
+        const endDate = new Date(dateRangeFilter.endDate);
+        matchesDateRange = appointmentDate <= endDate;
+      }
+      
+      return matchesSearch && matchesStatus && matchesDateRange;
     });
-  }, [appointments, searchTerm, statusFilter, dateFilter]);
+  }, [appointments, searchTerm, statusFilter, dateRangeFilter]);
 
   // Dashboard statistics
   const dashboardStats = useMemo(() => {
@@ -1552,9 +1854,15 @@ ${hospitalInfo.name} Team
       today: todayAppointments.length,
       scheduled: appointments.filter(a => a.status === 'scheduled').length,
       confirmed: appointments.filter(a => a.status === 'confirmed').length,
-      selected: selectedAppointments.size
+      selected: selectedAppointments.size,
+      totalPatients: patients.length
     };
-  }, [appointments, selectedAppointments]);
+  }, [appointments, selectedAppointments, patients]);
+
+  // Show login if not authenticated
+  if (!user) {
+    return <LoginPage hospitalInfo={hospitalInfo} onLogin={handleLogin} />;
+  }
 
   if (loading) {
     return (
@@ -1583,7 +1891,7 @@ ${hospitalInfo.name} Team
               </button>
               
               {hospitalInfo.logo ? (
-                <img src={hospitalInfo.logo} alt="Hospital Logo" className="h-logo-sm md:h-logo-md lg:h-logo-lg w-auto object-contain max-w-logo" />
+                <img src={hospitalInfo.logo} alt="Hospital Logo" className="h-8 w-auto" />
               ) : (
                 <div className="bg-blue-600 p-2 rounded-lg">
                   <Stethoscope className="w-6 h-6 text-white" />
@@ -1622,6 +1930,12 @@ ${hospitalInfo.name} Team
 
             {/* Right: Actions */}
             <div className="flex items-center gap-3">
+              {/* User info */}
+              <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600">
+                <User className="w-4 h-4" />
+                <span>{user.email}</span>
+              </div>
+
               {/* Primary Action */}
               <button
                 onClick={() => { setView('add-appointment'); resetForm(); }}
@@ -1647,6 +1961,15 @@ ${hospitalInfo.name} Team
                 title="Settings"
               >
                 <Settings className="w-5 h-5" />
+              </button>
+
+              {/* Logout */}
+              <button
+                onClick={handleLogout}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
+                title="Logout"
+              >
+                <LogOut className="w-5 h-5" />
               </button>
             </div>
           </div>
@@ -1688,6 +2011,10 @@ ${hospitalInfo.name} Team
               </button>
               
               <div className="border-t border-gray-200 pt-2 mt-2">
+                <div className="px-3 py-2 text-sm text-gray-600 flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  {user.email}
+                </div>
                 <button
                   onClick={() => { setShowStatistics(true); setMobileMenuOpen(false); }}
                   className="flex items-center gap-3 w-full px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
@@ -1706,11 +2033,11 @@ ${hospitalInfo.name} Team
                   onClick={() => { exportToCSV(); setMobileMenuOpen(false); }}
                   className="flex items-center gap-3 w-full px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200"
                 >
-                  <Download className="w-4 h-4" />
+                  <FileUp className="w-4 h-4" />
                   Export CSV
                 </button>
                 <label className="flex items-center gap-3 w-full px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition duration-200 cursor-pointer">
-                  <Upload className="w-4 h-4" />
+                  <FileDown className="w-4 h-4" />
                   Import CSV
                   <input
                     type="file"
@@ -1725,6 +2052,13 @@ ${hospitalInfo.name} Team
                 >
                   <Info className="w-4 h-4" />
                   CSV Instructions
+                </button>
+                <button
+                  onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-3 w-full px-3 py-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition duration-200"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
                 </button>
               </div>
             </div>
@@ -1744,7 +2078,7 @@ ${hospitalInfo.name} Team
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1796,11 +2130,23 @@ ${hospitalInfo.name} Team
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center justify-between">
                   <div>
+                    <p className="text-sm font-medium text-gray-600">Total Patients</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">{dashboardStats.totalPatients}</p>
+                  </div>
+                  <div className="bg-purple-100 p-3 rounded-xl">
+                    <User className="w-6 h-6 text-purple-600" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
                     <p className="text-sm font-medium text-gray-600">Selected</p>
                     <p className="text-3xl font-bold text-gray-900 mt-2">{dashboardStats.selected}</p>
                   </div>
-                  <div className="bg-purple-100 p-3 rounded-xl">
-                    <Mail className="w-6 h-6 text-purple-600" />
+                  <div className="bg-yellow-100 p-3 rounded-xl">
+                    <Mail className="w-6 h-6 text-yellow-600" />
                   </div>
                 </div>
               </div>
@@ -1846,38 +2192,52 @@ ${hospitalInfo.name} Team
               <div className="p-6">
                 {filteredAppointments.slice(0, 5).length > 0 ? (
                   <div className="space-y-4">
-                    {filteredAppointments.slice(0, 5).map(appointment => (
-                      <div key={appointment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-4">
-                          <input
-                            type="checkbox"
-                            checked={selectedAppointments.has(appointment.id)}
-                            onChange={() => toggleAppointmentSelection(appointment.id)}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <div className="bg-white p-2 rounded-lg">
-                            <User className="w-5 h-5 text-gray-600" />
+                    {filteredAppointments.slice(0, 5).map(appointment => {
+                      const patientName = appointment.patients?.name || appointment.patientName;
+                      const patientPhone = appointment.patients?.phone || appointment.patientPhone;
+                      
+                      return (
+                        <div key={appointment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedAppointments.has(appointment.id)}
+                              onChange={() => toggleAppointmentSelection(appointment.id)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <div className="bg-white p-2 rounded-lg">
+                              <User className="w-5 h-5 text-gray-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900">{patientName}</p>
+                              <p className="text-sm text-gray-600">{appointment.doctor} • {appointment.department}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{appointment.patientName}</p>
-                            <p className="text-sm text-gray-600">{appointment.doctor} • {appointment.department}</p>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <p className="font-medium text-gray-900">{appointment.appointmentDate}</p>
+                              <p className="text-sm text-gray-600">{appointment.appointmentTime}</p>
+                            </div>
+                            <button
+                              onClick={() => shareSingleAppointment(appointment)}
+                              className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition duration-200"
+                              title="Share via WhatsApp"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </button>
+                            {appointment.patient_id && (
+                              <button
+                                onClick={() => viewPatientHistory(patients.find(p => p.id === appointment.patient_id))}
+                                className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition duration-200"
+                                title="View Patient History"
+                              >
+                                <History className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <p className="font-medium text-gray-900">{appointment.appointmentDate}</p>
-                            <p className="text-sm text-gray-600">{appointment.appointmentTime}</p>
-                          </div>
-                          <button
-                            onClick={() => shareSingleAppointment(appointment)}
-                            className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition duration-200"
-                            title="Share via WhatsApp"
-                          >
-                            <Share2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-gray-500 text-center py-8">No recent appointments found</p>
@@ -1929,7 +2289,7 @@ ${hospitalInfo.name} Team
 
             {/* Filters */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
                   <div className="relative">
@@ -1961,11 +2321,21 @@ ${hospitalInfo.name} Team
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
                   <input
                     type="date"
-                    value={dateFilter}
-                    onChange={(e) => setDateFilter(e.target.value)}
+                    value={dateRangeFilter.startDate}
+                    onChange={(e) => setDateRangeFilter(prev => ({...prev, startDate: e.target.value}))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                  <input
+                    type="date"
+                    value={dateRangeFilter.endDate}
+                    onChange={(e) => setDateRangeFilter(prev => ({...prev, endDate: e.target.value}))}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </div>
@@ -2004,65 +2374,79 @@ ${hospitalInfo.name} Team
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredAppointments.map(appointment => (
-                      <tr key={appointment.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <input
-                            type="checkbox"
-                            checked={selectedAppointments.has(appointment.id)}
-                            onChange={() => toggleAppointmentSelection(appointment.id)}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{appointment.patientName}</div>
-                            <div className="text-sm text-gray-500">{appointment.patientPhone}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{appointment.appointmentDate}</div>
-                          <div className="text-sm text-gray-500">{appointment.appointmentTime}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{appointment.doctor}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{appointment.department}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <StatusBadge status={appointment.status} />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => shareSingleAppointment(appointment)}
-                              className="text-green-600 hover:text-green-900 p-1"
-                              title="Share via WhatsApp"
-                            >
-                              <Share2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleEditAppointment(appointment)}
-                              className="text-blue-600 hover:text-blue-900 p-1"
-                              title="Edit"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => { setCurrentAppointment(appointment); setShowStatusModal(true); }}
-                              className="text-green-600 hover:text-green-900 p-1"
-                              title="Update Status"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteAppointment(appointment.id)}
-                              className="text-red-600 hover:text-red-900 p-1"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredAppointments.map(appointment => {
+                      const patientName = appointment.patients?.name || appointment.patientName;
+                      const patientPhone = appointment.patients?.phone || appointment.patientPhone;
+                      
+                      return (
+                        <tr key={appointment.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={selectedAppointments.has(appointment.id)}
+                              onChange={() => toggleAppointmentSelection(appointment.id)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{patientName}</div>
+                              <div className="text-sm text-gray-500">{patientPhone}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{appointment.appointmentDate}</div>
+                            <div className="text-sm text-gray-500">{appointment.appointmentTime}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{appointment.doctor}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{appointment.department}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <StatusBadge status={appointment.status} />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => shareSingleAppointment(appointment)}
+                                className="text-green-600 hover:text-green-900 p-1"
+                                title="Share via WhatsApp"
+                              >
+                                <Share2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleEditAppointment(appointment)}
+                                className="text-blue-600 hover:text-blue-900 p-1"
+                                title="Edit"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => { setCurrentAppointment(appointment); setShowStatusModal(true); }}
+                                className="text-green-600 hover:text-green-900 p-1"
+                                title="Update Status"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              {appointment.patient_id && (
+                                <button
+                                  onClick={() => viewPatientHistory(patients.find(p => p.id === appointment.patient_id))}
+                                  className="text-purple-600 hover:text-purple-900 p-1"
+                                  title="View Patient History"
+                                >
+                                  <History className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteAppointment(appointment.id)}
+                                className="text-red-600 hover:text-red-900 p-1"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2101,6 +2485,34 @@ ${hospitalInfo.name} Team
               </div>
 
               <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Patient Search *
+                  </label>
+                  <PatientAutocomplete
+                    patients={patients}
+                    selectedPatient={selectedPatient}
+                    onPatientSelect={handlePatientSelect}
+                    onNewPatient={handleNewPatient}
+                    searchTerm={patientSearch}
+                    onSearchChange={setPatientSearch}
+                  />
+                  {selectedPatient && (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
+                      <Check className="w-4 h-4" />
+                      <span>Patient selected: {selectedPatient.name} - {selectedPatient.phone}</span>
+                      <button
+                        type="button"
+                        onClick={() => viewPatientHistory(selectedPatient)}
+                        className="text-blue-600 hover:text-blue-800 ml-2 flex items-center gap-1"
+                      >
+                        <History className="w-3 h-3" />
+                        View History
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2281,7 +2693,7 @@ ${hospitalInfo.name} Team
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-4">
               {hospitalInfo.logo ? (
-                <img src={hospitalInfo.logo} alt="Hospital Logo" className="h-logo-sm md:h-logo-md lg:h-logo-lg w-auto object-contain max-w-logo" />
+                <img src={hospitalInfo.logo} alt="Hospital Logo" className="h-8 w-auto" />
               ) : (
                 <div className="bg-blue-600 p-2 rounded-lg">
                   <Stethoscope className="w-5 h-5 text-white" />
@@ -2298,7 +2710,7 @@ ${hospitalInfo.name} Team
           </div>
           <div className="mt-8 pt-8 border-t border-gray-200 text-center">
             <p className="text-sm text-gray-500">
-              © 2025 Awesome Inc. All rights reserved.
+              © 2025 {hospitalInfo.name}. All rights reserved.
             </p>
           </div>
         </div>
@@ -2356,11 +2768,19 @@ ${hospitalInfo.name} Team
           setBulkProgress={setBulkProgress}
         />
       )}
+
+      {showPatientHistory && selectedPatientHistory && (
+        <PatientHistoryModal
+          patient={selectedPatientHistory}
+          appointments={appointments}
+          onClose={() => {
+            setShowPatientHistory(false);
+            setSelectedPatientHistory(null);
+          }}
+        />
+      )}
     </div>
   );
 };
 
 export default HospitalAppointmentSystem;
-
-
-
