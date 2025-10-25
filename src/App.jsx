@@ -1942,6 +1942,8 @@ const HospitalAppointmentSystem = () => {
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patientSearch, setPatientSearch] = useState('');
+  const [showNewPatientModal, setShowNewPatientModal] = useState(false);
+  const [newPatientData, setNewPatientData] = useState({ name: '', phone: '' });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateRangeFilter, setDateRangeFilter] = useState({
@@ -2111,32 +2113,53 @@ const HospitalAppointmentSystem = () => {
     }));
   };
 
-  const handleNewPatient = async (name) => {
-    try {
-      const newPatient = {
-        name,
-        phone: '',
-        createdAt: new Date().toISOString(),
-        createdBy: user?.email || ''
-      };
-
-      const { data, error } = await supabase
-        .from('patients')
-        .insert([newPatient])
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      setPatients(prev => [...prev, data]);
-      handlePatientSelect(data);
-      alert(`New patient "${name}" created successfully!`);
-    } catch (error) {
-      console.error('Error creating patient:', error);
-      alert('Error creating patient: ' + error.message);
-    }
+  const handleNewPatientClick = (name) => {
+  setNewPatientData({ name, phone: formData.patientPhone || '' });
+  setShowNewPatientModal(true);
   };
+  
+  const handleCreateNewPatient = async () => {
+    if (!newPatientData.name.trim()) {
+      alert('Patient name is required');
+      return;
+    }
+  
+    if (!newPatientData.phone.trim()) {
+      alert('Patient phone number is required');
+      return;
+    }
 
+  try {
+    const newPatient = {
+      name: newPatientData.name.trim(),
+      phone: newPatientData.phone.trim(),
+      createdAt: new Date().toISOString(),
+      createdBy: user?.email || ''
+    };
+
+    const { data, error } = await supabase
+      .from('patients')
+      .insert([newPatient])
+      .select()
+      .single();
+
+    if (error) throw error;
+    
+    setPatients(prev => [...prev, data]);
+    handlePatientSelect(data);
+    setShowNewPatientModal(false);
+    setNewPatientData({ name: '', phone: '' });
+    alert(`New patient "${newPatientData.name}" created successfully!`);
+  } catch (error) {
+    console.error('Error creating patient:', error);
+    alert('Error creating patient: ' + error.message);
+  }
+};
+
+const handleCloseNewPatientModal = () => {
+  setShowNewPatientModal(false);
+  setNewPatientData({ name: '', phone: '' });
+};
   const handleSubmitAppointment = async (e) => {
     e.preventDefault();
     
@@ -2861,7 +2884,7 @@ ${hospitalInfo.name} Team`.trim();
                       patients={patients}
                       selectedPatient={selectedPatient}
                       onPatientSelect={handlePatientSelect}
-                      onNewPatient={handleNewPatient}
+                      onNewPatient={handleNewPatientClick}
                       searchTerm={patientSearch}
                       onSearchChange={setPatientSearch}
                     />
@@ -3098,6 +3121,74 @@ ${hospitalInfo.name} Team`.trim();
           bulkProgress={bulkProgress}
           setBulkProgress={setBulkProgress}
         />
+      )}
+    {showNewPatientModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-600 p-2 rounded-lg">
+                  <UserPlus className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">Create New Patient</h2>
+                  <p className="text-gray-600 text-sm">Add patient details</p>
+                </div>
+              </div>
+              <button
+                onClick={handleCloseNewPatientModal}
+                className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Patient Name *
+                </label>
+                <input
+                  type="text"
+                  value={newPatientData.name}
+                  onChange={(e) => setNewPatientData(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  placeholder="Enter patient full name"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone Number *
+                </label>
+                <input
+                  type="tel"
+                  value={newPatientData.phone}
+                  onChange={(e) => setNewPatientData(prev => ({ ...prev, phone: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  placeholder="+234 XXX XXX XXXX"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleCloseNewPatientModal}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateNewPatient}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200"
+                >
+                  Create Patient
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
