@@ -561,14 +561,6 @@ const PasswordChangeModal = ({ isOpen, onClose }) => {
     }
 
     try {
-      // First, verify current password by signing in again
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        throw new Error('User not found');
-      }
-
-      // Update password
       const { error } = await supabase.auth.updateUser({
         password: newPassword
       });
@@ -1220,7 +1212,7 @@ const NavigationBar = ({
 };
 
 // ============================================================================
-// MODALS (Other modals remain the same)
+// STATISTICS MODAL
 // ============================================================================
 
 const StatisticsModal = ({ appointments, setShowStatistics }) => {
@@ -1385,8 +1377,128 @@ const StatisticsModal = ({ appointments, setShowStatistics }) => {
   );
 };
 
-// ... (Other modals: CalendarView, StatusUpdateModal, SettingsModal, CSVInstructionsModal, WhatsAppBulkModal remain the same)
-// Due to character limits, I'll include the essential modals and skip the repetitive ones
+// ============================================================================
+// SETTINGS MODAL
+// ============================================================================
+
+const SettingsModal = ({ hospitalInfo, setHospitalInfo, onClose }) => {
+  const [tempSettings, setTempSettings] = useState({ ...hospitalInfo });
+
+  const handleSave = () => {
+    setHospitalInfo(tempSettings);
+    localStorage.setItem('hospitalInfo', JSON.stringify(tempSettings));
+    onClose();
+  };
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setTempSettings({ ...tempSettings, logo: e.target.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg">
+              <Settings className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-800">Hospital Settings</h2>
+              <p className="text-gray-600 text-sm">Customize your hospital information</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition duration-200"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Hospital Name
+              </label>
+              <input
+                type="text"
+                value={tempSettings.name}
+                onChange={(e) => setTempSettings({ ...tempSettings, name: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Phone Number
+              </label>
+              <input
+                type="text"
+                value={tempSettings.phone}
+                onChange={(e) => setTempSettings({ ...tempSettings, phone: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Address
+              </label>
+              <input
+                type="text"
+                value={tempSettings.address}
+                onChange={(e) => setTempSettings({ ...tempSettings, address: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Hospital Logo
+              </label>
+              <div className="flex items-center gap-4">
+                {tempSettings.logo && (
+                  <img src={tempSettings.logo} alt="Hospital Logo" className="h-16 w-16 object-contain rounded-lg" />
+                )}
+                <div className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={onClose}
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ============================================================================
 // MAIN COMPONENT
@@ -1430,7 +1542,6 @@ const HospitalAppointmentSystem = () => {
     logo: '',
     primaryColor: '0000f9'
   });
-  const [tempSettings, setTempSettings] = useState({...hospitalInfo});
 
   // Form state
   const [formData, setFormData] = useState({
@@ -1454,7 +1565,6 @@ const HospitalAppointmentSystem = () => {
   }, []);
 
   const checkPasswordResetFlow = async () => {
-    // Check if this is a password reset flow
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('type') === 'recovery') {
       setIsResetPasswordFlow(true);
@@ -1479,7 +1589,232 @@ const HospitalAppointmentSystem = () => {
     await Promise.all([fetchAppointments(), fetchPatients(), fetchHospitalInfo()]);
   };
 
-  // ... (Other functions remain the same: fetchAppointments, fetchPatients, fetchHospitalInfo, etc.)
+  // Data fetching functions
+  const fetchAppointments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .order('appointmentDate', { ascending: true });
+      
+      if (error) throw error;
+      setAppointments(data || []);
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      setAppointments([]);
+    }
+  };
+
+  const fetchPatients = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      if (error) throw error;
+      setPatients(data || []);
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+      setPatients([]);
+    }
+  };
+
+  const fetchHospitalInfo = async () => {
+    try {
+      const savedInfo = localStorage.getItem('hospitalInfo');
+      if (savedInfo) {
+        setHospitalInfo(JSON.parse(savedInfo));
+      }
+    } catch (error) {
+      console.error('Error fetching hospital info:', error);
+    }
+  };
+
+  // Form handling functions
+  const resetForm = () => {
+    setFormData({
+      patientName: '',
+      patientPhone: '',
+      appointmentDate: '',
+      appointmentTime: '',
+      doctor: '',
+      department: '',
+      reason: '',
+      specialInstructions: '',
+      status: 'scheduled',
+      patientResponse: '',
+      patient_id: null
+    });
+    setSelectedPatient(null);
+    setPatientSearch('');
+    setEditingAppointment(null);
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handlePatientSelect = (patient) => {
+    setSelectedPatient(patient);
+    setFormData(prev => ({
+      ...prev,
+      patientName: patient.name,
+      patientPhone: patient.phone,
+      patient_id: patient.id
+    }));
+  };
+
+  const handleNewPatient = async (name) => {
+    const newPatient = {
+      name,
+      phone: '',
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .insert([newPatient])
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      setPatients(prev => [...prev, data]);
+      handlePatientSelect(data);
+    } catch (error) {
+      console.error('Error creating patient:', error);
+    }
+  };
+
+  const handleSubmitAppointment = async (e) => {
+    e.preventDefault();
+    
+    try {
+      const appointmentData = {
+        ...formData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      if (editingAppointment) {
+        // Update existing appointment
+        const { error } = await supabase
+          .from('appointments')
+          .update(appointmentData)
+          .eq('id', editingAppointment.id);
+
+        if (error) throw error;
+        
+        setAppointments(prev => 
+          prev.map(apt => apt.id === editingAppointment.id ? { ...apt, ...appointmentData } : apt)
+        );
+      } else {
+        // Create new appointment
+        const { data, error } = await supabase
+          .from('appointments')
+          .insert([appointmentData])
+          .select()
+          .single();
+
+        if (error) throw error;
+        
+        setAppointments(prev => [...prev, data]);
+      }
+
+      resetForm();
+      setView('appointments');
+    } catch (error) {
+      console.error('Error saving appointment:', error);
+      alert('Error saving appointment: ' + error.message);
+    }
+  };
+
+  // CSV Export/Import
+  const exportToCSV = () => {
+    const headers = ['Patient Name', 'Phone', 'Date', 'Time', 'Doctor', 'Department', 'Reason', 'Status'];
+    const csvData = appointments.map(apt => [
+      apt.patientName,
+      apt.patientPhone,
+      apt.appointmentDate,
+      apt.appointmentTime,
+      apt.doctor,
+      apt.department,
+      apt.reason,
+      apt.status
+    ]);
+
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(field => `"${field}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `appointments-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const importFromCSV = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const csv = event.target.result;
+        const lines = csv.split('\n');
+        const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+        
+        const newAppointments = [];
+        
+        for (let i = 1; i < lines.length; i++) {
+          if (!lines[i].trim()) continue;
+          
+          const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
+          const appointment = {
+            patientName: values[0] || '',
+            patientPhone: values[1] || '',
+            appointmentDate: values[2] || '',
+            appointmentTime: values[3] || '',
+            doctor: values[4] || '',
+            department: values[5] || '',
+            reason: values[6] || '',
+            status: values[7] || 'scheduled',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          newAppointments.push(appointment);
+        }
+
+        // Insert into database
+        const { error } = await supabase
+          .from('appointments')
+          .insert(newAppointments);
+
+        if (error) throw error;
+        
+        await fetchAppointments();
+        alert(`Successfully imported ${newAppointments.length} appointments`);
+        
+        // Reset file input
+        e.target.value = '';
+      } catch (error) {
+        console.error('Error importing CSV:', error);
+        alert('Error importing CSV: ' + error.message);
+      }
+    };
+    
+    reader.readAsText(file);
+  };
 
   // Authentication handlers
   const handleLogin = (user) => {
@@ -1501,7 +1836,6 @@ const HospitalAppointmentSystem = () => {
 
   const handlePasswordResetComplete = () => {
     setIsResetPasswordFlow(false);
-    // Redirect to login or show success message
   };
 
   // Show appropriate component based on authentication state
@@ -1529,8 +1863,22 @@ const HospitalAppointmentSystem = () => {
     );
   }
 
+  // Filter appointments based on search and filters
+  const filteredAppointments = appointments.filter(apt => {
+    const matchesSearch = apt.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         apt.patientPhone.includes(searchTerm) ||
+                         apt.doctor.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || apt.status === statusFilter;
+    
+    const matchesDateRange = (!dateRangeFilter.startDate || apt.appointmentDate >= dateRangeFilter.startDate) &&
+                           (!dateRangeFilter.endDate || apt.appointmentDate <= dateRangeFilter.endDate);
+    
+    return matchesSearch && matchesStatus && matchesDateRange;
+  });
+
   return (
-    <div className="min-h-screen bg-gray-50" style={{ '--primary-color': hospitalInfo.primaryColor }}>
+    <div className="min-h-screen bg-gray-50">
       {/* Clean Navigation Bar */}
       <NavigationBar
         user={user}
@@ -1550,9 +1898,391 @@ const HospitalAppointmentSystem = () => {
         setMobileMenuOpen={setMobileMenuOpen}
       />
 
-      {/* Main content remains the same */}
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* ... (All the view content remains exactly the same) ... */}
+        {view === 'dashboard' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Appointments</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">{appointments.length}</p>
+                  </div>
+                  <div className="bg-blue-100 p-3 rounded-lg">
+                    <Calendar className="w-6 h-6 text-blue-600" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Scheduled</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">
+                      {appointments.filter(a => a.status === 'scheduled').length}
+                    </p>
+                  </div>
+                  <div className="bg-blue-100 p-3 rounded-lg">
+                    <Clock className="w-6 h-6 text-blue-600" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Confirmed</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">
+                      {appointments.filter(a => a.status === 'confirmed').length}
+                    </p>
+                  </div>
+                  <div className="bg-green-100 p-3 rounded-lg">
+                    <Check className="w-6 h-6 text-green-600" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Patients</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">{patients.length}</p>
+                  </div>
+                  <div className="bg-purple-100 p-3 rounded-lg">
+                    <Users className="w-6 h-6 text-purple-600" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Appointments */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900">Recent Appointments</h2>
+              </div>
+              <div className="p-6">
+                {filteredAppointments.slice(0, 5).map(appointment => (
+                  <div key={appointment.id} className="flex items-center justify-between py-4 border-b border-gray-100 last:border-b-0">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-gray-100 p-2 rounded-lg">
+                        <User className="w-5 h-5 text-gray-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{appointment.patientName}</p>
+                        <p className="text-sm text-gray-600">{appointment.patientPhone}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-gray-900">{appointment.appointmentDate}</p>
+                      <p className="text-sm text-gray-600">{appointment.appointmentTime}</p>
+                    </div>
+                    <StatusBadge status={appointment.status} />
+                  </div>
+                ))}
+                {filteredAppointments.length === 0 && (
+                  <div className="text-center py-8">
+                    <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No appointments found</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view === 'appointments' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
+                <p className="text-gray-600">Manage and view all appointments</p>
+              </div>
+              
+              <div className="flex flex-wrap gap-3">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search appointments..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                >
+                  <option value="all">All Status</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="no-show">No Show</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Patient
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date & Time
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Doctor
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredAppointments.map(appointment => (
+                      <tr key={appointment.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{appointment.patientName}</div>
+                            <div className="text-sm text-gray-500">{appointment.patientPhone}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{appointment.appointmentDate}</div>
+                          <div className="text-sm text-gray-500">{appointment.appointmentTime}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{appointment.doctor}</div>
+                          <div className="text-sm text-gray-500">{appointment.department}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <StatusBadge status={appointment.status} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => {
+                              setEditingAppointment(appointment);
+                              setFormData({
+                                patientName: appointment.patientName,
+                                patientPhone: appointment.patientPhone,
+                                appointmentDate: appointment.appointmentDate,
+                                appointmentTime: appointment.appointmentTime,
+                                doctor: appointment.doctor,
+                                department: appointment.department,
+                                reason: appointment.reason,
+                                specialInstructions: appointment.specialInstructions,
+                                status: appointment.status,
+                                patientResponse: appointment.patientResponse,
+                                patient_id: appointment.patient_id
+                              });
+                              setView('add-appointment');
+                            }}
+                            className="text-blue-600 hover:text-blue-900 mr-3"
+                          >
+                            <Edit3 className="w-4 h-4 inline" />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (confirm('Are you sure you want to delete this appointment?')) {
+                                try {
+                                  const { error } = await supabase
+                                    .from('appointments')
+                                    .delete()
+                                    .eq('id', appointment.id);
+                                  
+                                  if (error) throw error;
+                                  
+                                  setAppointments(prev => prev.filter(apt => apt.id !== appointment.id));
+                                } catch (error) {
+                                  console.error('Error deleting appointment:', error);
+                                  alert('Error deleting appointment: ' + error.message);
+                                }
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="w-4 h-4 inline" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                
+                {filteredAppointments.length === 0 && (
+                  <div className="text-center py-12">
+                    <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No appointments found</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view === 'add-appointment' && (
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <h1 className="text-2xl font-bold text-gray-900">
+                  {editingAppointment ? 'Edit Appointment' : 'New Appointment'}
+                </h1>
+                <p className="text-gray-600">
+                  {editingAppointment ? 'Update appointment details' : 'Schedule a new appointment'}
+                </p>
+              </div>
+
+              <form onSubmit={handleSubmitAppointment} className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Patient Search
+                    </label>
+                    <PatientAutocomplete
+                      patients={patients}
+                      selectedPatient={selectedPatient}
+                      onPatientSelect={handlePatientSelect}
+                      onNewPatient={handleNewPatient}
+                      searchTerm={patientSearch}
+                      onSearchChange={setPatientSearch}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Patient Phone
+                    </label>
+                    <input
+                      type="text"
+                      name="patientPhone"
+                      value={formData.patientPhone}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="Phone number"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Appointment Date
+                    </label>
+                    <input
+                      type="date"
+                      name="appointmentDate"
+                      value={formData.appointmentDate}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Appointment Time
+                    </label>
+                    <input
+                      type="time"
+                      name="appointmentTime"
+                      value={formData.appointmentTime}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Doctor
+                    </label>
+                    <input
+                      type="text"
+                      name="doctor"
+                      value={formData.doctor}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="Doctor's name"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Department
+                    </label>
+                    <input
+                      type="text"
+                      name="department"
+                      value={formData.department}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="Department"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Reason for Visit
+                  </label>
+                  <textarea
+                    name="reason"
+                    value={formData.reason}
+                    onChange={handleInputChange}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    placeholder="Reason for appointment"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Special Instructions
+                  </label>
+                  <textarea
+                    name="specialInstructions"
+                    value={formData.specialInstructions}
+                    onChange={handleInputChange}
+                    rows={2}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    placeholder="Any special instructions for the patient"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetForm();
+                      setView('appointments');
+                    }}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 rounded-lg transition duration-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200"
+                  >
+                    {editingAppointment ? 'Update Appointment' : 'Create Appointment'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Footer */}
@@ -1592,7 +2322,31 @@ const HospitalAppointmentSystem = () => {
         />
       )}
 
-      {/* ... (Other modals remain the same) ... */}
+      {showStatistics && (
+        <StatisticsModal
+          appointments={appointments}
+          setShowStatistics={setShowStatistics}
+        />
+      )}
+
+      {showSettings && (
+        <SettingsModal
+          hospitalInfo={hospitalInfo}
+          setHospitalInfo={setHospitalInfo}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {showPatientHistory && selectedPatientHistory && (
+        <PatientHistoryModal
+          patient={selectedPatientHistory}
+          appointments={appointments}
+          onClose={() => {
+            setShowPatientHistory(false);
+            setSelectedPatientHistory(null);
+          }}
+        />
+      )}
     </div>
   );
 };
