@@ -1933,6 +1933,50 @@ const NavigationBar = ({
 // ============================================================================
 
 const HospitalAppointmentSystem = () => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [logoutTimer, setLogoutTimer] = useState(null);
+  const LOGOUT_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+  const resetLogoutTimer = () => {
+    if (logoutTimer) {
+      clearTimeout(logoutTimer);
+    }
+    
+    const timer = setTimeout(() => {
+      handleAutoLogout();
+    }, LOGOUT_TIMEOUT);
+    
+    setLogoutTimer(timer);
+  };
+
+  const handleAutoLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    // Reset your other states...
+    alert('Automatically logged out after 30 minutes of inactivity.');
+  };
+
+  // Track user activity
+  useEffect(() => {
+    if (!user) return;
+
+    const activities = ['mousemove', 'keypress', 'click', 'scroll'];
+    const handleActivity = () => resetLogoutTimer();
+
+    activities.forEach(activity => {
+      document.addEventListener(activity, handleActivity);
+    });
+
+    resetLogoutTimer();
+
+    return () => {
+      activities.forEach(activity => {
+        document.removeEventListener(activity, handleActivity);
+      });
+      if (logoutTimer) clearTimeout(logoutTimer);
+    };
+  }, [user]);
   // State management
   const [user, setUser] = useState(null);
   const [view, setView] = useState('dashboard');
@@ -3195,3 +3239,4 @@ ${hospitalInfo.name} Team`.trim();
 };
 
 export default HospitalAppointmentSystem;
+
